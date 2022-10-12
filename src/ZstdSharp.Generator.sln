@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32825.248
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ZstdSharp.Generator", "ZstdSharp.Generator\ZstdSharp.Generator.csproj", "{8B11BA20-328A-441D-99B1-A2E42D5696D3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ClangSharp", "ClangSharp\ClangSharp.csproj", "{BE79DD9B-4AC9-402C-A498-5507A62E63B5}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{8B11BA20-328A-441D-99B1-A2E42D5696D3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B11BA20-328A-441D-99B1-A2E42D5696D3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B11BA20-328A-441D-99B1-A2E42D5696D3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B11BA20-328A-441D-99B1-A2E42D5696D3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BE79DD9B-4AC9-402C-A498-5507A62E63B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BE79DD9B-4AC9-402C-A498-5507A62E63B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BE79DD9B-4AC9-402C-A498-5507A62E63B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BE79DD9B-4AC9-402C-A498-5507A62E63B5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {55F72B59-C972-4B64-845A-F109817B1B35}
+	EndGlobalSection
+EndGlobal

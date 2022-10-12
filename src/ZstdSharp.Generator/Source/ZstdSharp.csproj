@@ -1,0 +1,39 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0</TargetFrameworks>
+    <LangVersion>9.0</LangVersion>
+    <SignAssembly>true</SignAssembly>
+    <AssemblyOriginatorKeyFile>key.snk</AssemblyOriginatorKeyFile>
+    <Authors>Oleg Stepanischev</Authors>
+    <Copyright>Copyright $(Authors) $([System.DateTime]::UtcNow.ToString(yyyy))</Copyright>
+    <Description>Port of zstd compression library to c#</Description>
+    <PackageId>ZstdSharp.Port</PackageId>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageOutputPath>$(SolutionDir)/../nugets</PackageOutputPath>
+    <PackageProjectUrl>https://github.com/oleg-st/ZstdSharp</PackageProjectUrl>
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <PackageTags>zstd zstandard port compression</PackageTags>
+    <Version>0.6.4</Version>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Fody" Version="6.5.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="InlineIL.Fody" Version="1.7.0" PrivateAssets="all" />
+    <PackageReference Include="InlineMethod.Fody" Version="0.6.2" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,7 @@
+bin/
+obj/
+*.user
+src/.vs
+/nugets/
+*.DotSettings
+launchSettings.json

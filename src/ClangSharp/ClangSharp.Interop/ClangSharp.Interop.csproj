@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net7.0;netstandard2.0</TargetFrameworks>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <Compile Remove="Extensions/clang.ResolveLibrary.cs" />
+    <InternalsVisibleTo Include="ClangSharp" Key="$(AssemblyOriginatorPublicKey)" />
+    <InternalsVisibleTo Include="ClangSharp.PInvokeGenerator" Key="$(AssemblyOriginatorPublicKey)" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <Compile Remove="Shims/Index.cs" />
+    <Compile Remove="Shims/MemberNotNullWhenAttribute.cs" />
+    <Compile Remove="Shims/Range.cs" />
+    <Compile Remove="Shims/SkipLocalsInitAttribute.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="libClang" />
+    <PackageReference Include="libClangSharp" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">
+    <PackageReference Include="Microsoft.Bcl.HashCode" />
+    <PackageReference Include="System.Memory" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LangVersion>preview</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="libclang.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="libClangSharp.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="ClangSharp.Interop/Shims/Index.cs" />
+    <Compile Remove="ClangSharp.Interop/Shims/MemberNotNullWhenAttribute.cs" />
+    <Compile Remove="ClangSharp.Interop/Shims/Range.cs" />
+    <Compile Remove="ClangSharp.Interop/Shims/SkipLocalsInitAttribute.cs" />
+  </ItemGroup>
+
+</Project>
