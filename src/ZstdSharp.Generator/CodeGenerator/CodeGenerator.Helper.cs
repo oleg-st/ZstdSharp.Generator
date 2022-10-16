@@ -617,4 +617,56 @@ internal partial class CodeGenerator
                     SyntaxFactory.Token(SyntaxKind.StaticKeyword),
                     SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)));
     }
+
+    private ExpressionSyntax GetInnerExpression(ExpressionSyntax expression)
+    {
+        return expression is ParenthesizedExpressionSyntax parenthesizedExpression
+            ? GetInnerExpression(parenthesizedExpression.Expression)
+            : expression;
+    }
+
+    internal ExpressionSyntax NegateLogicalExpression(ExpressionSyntax expression)
+    {
+        var innerExpression = GetInnerExpression(expression);
+
+        switch (innerExpression)
+        {
+            case BinaryExpressionSyntax binaryExpression:
+                switch (binaryExpression.Kind())
+                {
+                    // ! x == y -> x != y
+                    case SyntaxKind.EqualsExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.NotEqualsExpression, binaryExpression.Left, binaryExpression.Right);
+                    // ! x != y -> x == y
+                    case SyntaxKind.NotEqualsExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression, binaryExpression.Left, binaryExpression.Right);
+                    // ! x < y -> x >= y
+                    case SyntaxKind.LessThanExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.GreaterThanOrEqualExpression, binaryExpression.Left, binaryExpression.Right);
+                    // ! x <= y -> x > y
+                    case SyntaxKind.LessThanOrEqualExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.GreaterThanExpression, binaryExpression.Left, binaryExpression.Right);
+                    // ! x > y -> x <= y
+                    case SyntaxKind.GreaterThanExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.LessThanOrEqualExpression, binaryExpression.Left, binaryExpression.Right);
+                    // ! x >= y -> x < y
+                    case SyntaxKind.GreaterThanOrEqualExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.LessThanExpression, binaryExpression.Left, binaryExpression.Right);
+                    // ! x || y -> ! x && ! y
+                    case SyntaxKind.LogicalOrExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.LogicalAndExpression, NegateLogicalExpression(binaryExpression.Left), NegateLogicalExpression(binaryExpression.Right));
+                    // ! x && y -> ! x || ! y
+                    case SyntaxKind.LogicalAndExpression:
+                        return SyntaxFactory.BinaryExpression(SyntaxKind.LogicalOrExpression, NegateLogicalExpression(binaryExpression.Left), NegateLogicalExpression(binaryExpression.Right));
+                }
+
+                break;
+            // ! !x -> x
+            case PrefixUnaryExpressionSyntax prefixUnaryExpression when prefixUnaryExpression.Kind() == SyntaxKind.LogicalNotExpression:
+                return prefixUnaryExpression.Operand;
+        }
+
+        // ! x -> !x
+        return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expression));
+    }
 }

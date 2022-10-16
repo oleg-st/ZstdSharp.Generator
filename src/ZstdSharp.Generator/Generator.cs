@@ -150,10 +150,17 @@ public class Generator
             {"memcpy", new CallReplacer.CallReplacementInvocation("memcpy",new TypeCaster.VoidType(),
                 "static ZstdSharp.UnsafeHelper", new TypeCaster.CustomType[] { new TypeCaster.PointerType("void*"), new TypeCaster.PointerType("void*"), TypeCaster.IntegerType.Create("uint") })},
             {"ZSTD_cpuSupportsBmi2", new CallReplacer.CallReplacementExpression("0", TypeCaster.IntegerType.Create("int"))},
+            {"assert", new CallReplacer.CallReplacementIdentity(new TypeCaster.VoidType(), "static ZstdSharp.UnsafeHelper")},
+            {"Prefetch0", new CallReplacer.CallReplacementIdentity(new TypeCaster.VoidType(), "static ZstdSharp.UnsafeHelper")},
+            {"Prefetch1", new CallReplacer.CallReplacementIdentity(new TypeCaster.VoidType(), "static ZstdSharp.UnsafeHelper")},
+
             // bool
             {"ERR_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
             {"HUF_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
             {"FSE_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
+            {"HIST_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
+            {"ZDICT_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
+            {"ZSTD_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
             // string
             {"ERR_getErrorName", new CallReplacer.CallReplacementIdentity(new TypeCaster.StringType())},
             {"ERR_getErrorString", new CallReplacer.CallReplacementIdentity(new TypeCaster.StringType())},

@@ -369,9 +369,7 @@ internal partial class CodeGenerator
         if (IsEmptyStatement(thenStatement) && !IsEmptyStatement(elseStatement))
         {
             // negate condition
-            return SyntaxFactory.IfStatement(
-                SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression,
-                    SyntaxFactory.ParenthesizedExpression(Visit<ExpressionSyntax>(ifStmt.Cond)!)), elseStatement);
+            return SyntaxFactory.IfStatement(NegateLogicalExpression(Visit<ExpressionSyntax>(ifStmt.Cond)!), elseStatement);
         }
 
         var ifCond = Visit<ExpressionSyntax>(ifStmt.Cond);

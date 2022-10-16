@@ -74,7 +74,7 @@ internal class CallReplacer
             return invocationExpressionSyntax;
         }
 
-        public CallReplacementIdentity(TypeCaster.CustomType type) : base(type)
+        public CallReplacementIdentity(TypeCaster.CustomType type, string? usingDirective = null) : base(type, usingDirective)
         {
         }
     }

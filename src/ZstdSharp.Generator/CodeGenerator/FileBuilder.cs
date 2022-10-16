@@ -128,9 +128,6 @@ internal class FileBuilder
 
         if (MethodsMembers.Count > 0)
         {
-            // memset, memcpy, assert, GetArrayPointer, RefToPointer etc
-            AddUsingDirective("static ZstdSharp.UnsafeHelper");
-
             namespaceDeclarationSyntax = namespaceDeclarationSyntax
                 .AddMembers(SyntaxFactory
                     .ClassDeclaration(MethodsClassName)
