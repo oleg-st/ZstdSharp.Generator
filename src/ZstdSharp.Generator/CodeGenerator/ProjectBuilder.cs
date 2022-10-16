@@ -133,4 +133,6 @@ internal class ProjectBuilder
         // simplify project
         await Simplify();
     }
+
+    public bool HasMethod(string name) => _methodBuilders.ContainsKey(name);
 }

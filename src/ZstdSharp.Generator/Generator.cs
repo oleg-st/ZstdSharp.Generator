@@ -6,9 +6,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using ClangSharp;
 using ClangSharp.Interop;
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ZstdSharp.Generator.CodeGenerator;
 using ZstdSharp.Generator.CodeGenerator.Macros;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
@@ -25,7 +22,7 @@ public class Generator
     private readonly string _outputLocation;
     private readonly string _unsafeOutputLocation;
     private readonly string _sourceLocation;
-    private readonly List<string> _filenames;
+    private readonly List<string> _fileNames;
     private readonly string[] _clangCommandLineArgs;
     private readonly ProjectBuilder _projectBuilder;
 
@@ -36,7 +33,7 @@ public class Generator
         _unsafeOutputLocation = Path.Combine(_outputLocation, "Unsafe");
         _sourceLocation = "Source";
 
-        _filenames = new List<string>
+        _fileNames = new List<string>
         {
             // common
             "common/debug.c",
@@ -84,7 +81,7 @@ public class Generator
 
     private void CheckFiles()
     {
-        foreach (var filename in _filenames)
+        foreach (var filename in _fileNames)
         {
             var path = Path.Combine(_inputLocation, filename);
             if (!File.Exists(path))
@@ -122,7 +119,7 @@ public class Generator
             // ErrorPrivate
             "_force_has_format_string",
             // 1.5.3
-            "ZSTD_cpuSupportsBmi2",
+            "ZSTD_cpuSupportsBmi2", "ZSTD_countTrailingZeros32_fallback", "ZSTD_countLeadingZeros32_fallback", "ZSTD_countLeadingZeros32", "ZSTD_countLeadingZeros64",
         };
         var callReplacements = new Dictionary<string, CallReplacer.CallReplacement>
         {
@@ -234,342 +231,12 @@ public class Generator
         Console.WriteLine("Generate");
         await GenerateProject(macroStorage);
         Console.WriteLine("Modify");
-        ModifyProject();
+        var projectModifier = new ProjectModifier(_projectBuilder, _projectBuilder.Reporter);
+        projectModifier.ModifyProject();
         Console.WriteLine("Save");
         await _projectBuilder.Save();
 
         Console.WriteLine($"Finished in {sw.ElapsedMilliseconds} ms");
-    }
-
-    private void ModifyMethod(string name, Func<FileBuilder, MethodDeclarationSyntax, MethodDeclarationSyntax?> modifier)
-    {
-        if (_projectBuilder.TryGetMethod(name, out var builder, out var methodDeclarationSyntax))
-        {
-            builder.ReplaceMethod(name, modifier(builder, methodDeclarationSyntax));
-        }
-        else
-        {
-            Console.WriteLine($"Error: No method {name}");
-        }
-    }
-
-    private static BlockSyntax ParseBody(string body) => (BlockSyntax)SyntaxFactory.ParseStatement($"{{{body}}}");
-
-    private static SyntaxList<TSyntax> WrapWithIfDefined<TSyntax>(SyntaxList<TSyntax> statements, string name) where TSyntax : SyntaxNode
-    {
-        var firstStatement = statements.First();
-        statements = statements.Replace(firstStatement, firstStatement
-            .WithLeadingTrivia(SyntaxFactory.Trivia(
-                SyntaxFactory.IfDirectiveTrivia(
-                    SyntaxFactory.IdentifierName(name),
-                    true,
-                    false,
-                    false))));
-
-        var lastStatement = statements.Last();
-        return statements.Replace(lastStatement, lastStatement
-            .WithTrailingTrivia(SyntaxFactory.Trivia(
-                SyntaxFactory.EndIfDirectiveTrivia(
-                    true))));
-    }
-
-    private static TSyntax WrapWithIfDefined<TSyntax>(TSyntax statement, string name) where TSyntax : SyntaxNode
-    {
-        return statement
-            .WithLeadingTrivia(SyntaxFactory.Trivia(
-                SyntaxFactory.IfDirectiveTrivia(
-                    SyntaxFactory.IdentifierName(name),
-                    true,
-                    false,
-                    false)))
-            .WithTrailingTrivia(SyntaxFactory.Trivia(
-                SyntaxFactory.EndIfDirectiveTrivia(
-                    true)));
-    }
-
-    // todo made for zstd 1.5.2
-    private void ModifyProject()
-    {
-        ModifyMethod("ZSTD_highbit32", (builder, method) =>
-        {
-            builder.AddUsingDirective("System.Numerics");
-            return method.WithBody(ParseBody("assert(val != 0);return (uint) BitOperations.Log2(val);"));
-        });
-
-        ModifyMethod("ZSTD_countTrailingZeros", (builder, method) =>
-        {
-            builder.AddUsingDirective("System.Numerics");
-            return method.WithBody(ParseBody("assert(val != 0);return (uint) BitOperations.TrailingZeroCount(val);"));
-        });
-
-        ModifyMethod("FSE_ctz", (builder, method) =>
-        {
-            builder.AddUsingDirective("System.Numerics");
-            return method.WithBody(ParseBody("assert(val != 0);return (uint) BitOperations.TrailingZeroCount(val);"));
-        });
-
-        ModifyMethod("ZSTD_NbCommonBytes", (builder, method) =>
-        {
-            builder.AddUsingDirective("System.Numerics");
-            return method.WithBody(ParseBody(
-                "assert(val != 0);if (BitConverter.IsLittleEndian){return (uint)(BitOperations.TrailingZeroCount(val) >> 3);} return (uint)(BitOperations.Log2(val) >> 3);"));
-        });
-
-        ModifyMethod("ZSTD_VecMask_next", (builder, method) =>
-        {
-            builder.AddUsingDirective("System.Numerics");
-            return method.WithBody(ParseBody("assert(val != 0);return (uint) BitOperations.TrailingZeroCount(val);"));
-        });
-
-        ModifyMethod("BIT_highbit32", (builder, method) =>
-        {
-            builder.AddUsingDirective("System.Numerics");
-            return method.WithBody(ParseBody("assert(val != 0);return (uint) BitOperations.Log2(val);"));
-        });
-
-        ModifyMethod("XXH_memcpy", (_, method) => method.WithBody(ParseBody("memcpy(dest, src, (uint)size);")));
-
-        ModifyMethod("ZSTD_copy16", (_, method) => method.WithBody(ParseBody("memcpy(dst, src, 16);")));
-
-        ModifyMethod("ZSTD_row_getSSEMask", (_, method) => WrapWithIfDefined(method, "NETCOREAPP3_0_OR_GREATER"));
-
-        ModifyMethod("BIT_getMiddleBits", (builder, method) =>
-        {
-            var body = method.Body!;
-            builder.AddUsingDirective("System.Runtime.Intrinsics.X86");
-            var returnStatement = body.Statements.First(s => s is ReturnStatementSyntax);
-
-            var block = ParseBody(
-                "if (Bmi2.X64.IsSupported) {return (nuint) Bmi2.X64.ZeroHighBits(bitContainer >> (int) (start & regMask), nbBits);}if (Bmi2.IsSupported) {return Bmi2.ZeroHighBits((uint) (bitContainer >> (int) (start & regMask)), nbBits);}");
-
-            var statements = WrapWithIfDefined(block.Statements, "NETCOREAPP3_1_OR_GREATER");
-            return method.WithBody(body.InsertNodesBefore(returnStatement, statements));
-        });
-
-        ModifyMethod("BIT_getLowerBits", (builder, method) =>
-        {
-            var body = method.Body!;
-            builder.AddUsingDirective("System.Runtime.Intrinsics.X86");
-            var returnStatement = body.Statements.First(s => s is ReturnStatementSyntax);
-
-            var block = ParseBody(
-                "if (Bmi2.X64.IsSupported) {return (nuint) Bmi2.X64.ZeroHighBits(bitContainer, nbBits);}if (Bmi2.IsSupported) {return Bmi2.ZeroHighBits((uint)bitContainer, nbBits);}");
-
-            var statements = WrapWithIfDefined(block.Statements, "NETCOREAPP3_1_OR_GREATER");
-            return method.WithBody(body.InsertNodesBefore(returnStatement, statements));
-        });
-
-        ModifyMethod("ZSTD_buildSequencesStatistics", (_, method) => AddSkipInit(method, "stats"));
-
-        ModifyMethod("ZSTD_compressBlock_opt_generic", (_, method) => AddSkipInit(method, "lastSequence"));
-
-        ModifyMethod("ZSTD_decompressSequences_bodySplitLitBuffer", (_, method) => AddSkipInit(method, "seqState"));
-
-        ModifyMethod("ZSTD_decompressSequences_body", (_, method) => AddSkipInit(method, "seqState"));
-
-        ModifyMethod("ZSTD_decompressSequencesLong_body", (_, method) => AddSkipInit(method, "seqState"));
-
-        ModifyMethod("ZSTD_encodeSequences_body",
-            (_, method) => method
-                .WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Where(attributeList =>
-                    !attributeList.Attributes.Any(attribute =>
-                        attribute.ToString().Contains("MethodImplOptions.AggressiveInlining"))))));
-
-        ModifyMethod("ZSTD_hashPtr", (_, method) => ConvertMethodSwitchToIfs(method));
-
-        ModifyMethod("ZSTD_row_getMatchMask", (builder, method) =>
-        {
-            var body = method.Body!;
-            var returnStatement = body.Statements.First(s => s is ReturnStatementSyntax);
-
-            // conditional sse implementation
-            var statements = new List<SyntaxNode>
-            {
-                WrapWithIfDefined(SyntaxFactory.IfStatement(
-                        SyntaxFactory.MemberAccessExpression(
-                            SyntaxKind.SimpleMemberAccessExpression,
-                            SyntaxFactory.IdentifierName("Sse2"),
-                            SyntaxFactory.IdentifierName("IsSupported")),
-                        SyntaxFactory.Block(
-                            SyntaxFactory.SingletonList(
-                                returnStatement))), "NETCOREAPP3_0_OR_GREATER")
-            };
-
-            // arm implementation
-            var armImplementation = ParseBody(
-                "/* This NEON path only works for little endian - otherwise use SWAR below */\r\n            if (AdvSimd.IsSupported && BitConverter.IsLittleEndian)\r\n            {\r\n                if (rowEntries == 16)\r\n                {\r\n                    Vector128<byte> chunk = AdvSimd.LoadVector128(src);\r\n                    Vector128<UInt16> equalMask = AdvSimd.CompareEqual(chunk, AdvSimd.DuplicateToVector128(tag)).As<byte, UInt16>();\r\n                    Vector128<UInt16> t0 = AdvSimd.ShiftLeftLogical(equalMask, 7);\r\n                    Vector128<UInt32> t1 = AdvSimd.ShiftRightAndInsert(t0, t0, 14).As<UInt16, UInt32>();\r\n                    Vector128<UInt64> t2 = AdvSimd.ShiftRightLogical(t1, 14).As<UInt32, UInt64>();\r\n                    Vector128<byte> t3 = AdvSimd.ShiftRightLogicalAdd(t2, t2, 28).As<UInt64, byte>();\r\n                    ushort hi = AdvSimd.Extract(t3, 8);\r\n                    ushort lo = AdvSimd.Extract(t3, 0);\r\n                    return BitOperations.RotateRight((ushort)((hi << 8) | lo), (int)head);\r\n                }\r\n                else if (rowEntries == 32)\r\n                {\r\n                    // todo, there is no vld2q_u16 in c#\r\n                }\r\n                else\r\n                { /* rowEntries == 64 */\r\n                    // todo, there is no vld4q_u8 in c#\r\n                }\r\n            }\r\n");
-            builder.AddUsingDirective("System.Runtime.Intrinsics.Arm");
-            var armImplementationStatements = WrapWithIfDefined(armImplementation.Statements, "NET5_0_OR_GREATER");
-            statements.AddRange(armImplementationStatements);
-
-            // soft implementation
-            var softImplementation = ParseBody(
-                "nuint chunkSize = (nuint)sizeof(nuint);\r\n                nuint shiftAmount = chunkSize * 8 - chunkSize;\r\n                nuint xFF = ~(nuint)0;\r\n                nuint x01 = xFF / 0xFF;\r\n                nuint x80 = x01 << 7;\r\n                nuint splatChar = tag * x01;\r\n                ulong matches = 0;\r\n                int i = (int)(rowEntries - chunkSize);\r\n                assert(sizeof(nuint) == 4 || sizeof(nuint) == 8);\r\n                if (BitConverter.IsLittleEndian)\r\n                {\r\n                    nuint extractMagic = xFF / 0x7F >> (int)chunkSize;\r\n                    do\r\n                    {\r\n                        nuint chunk = MEM_readST(&src[i]);\r\n                        chunk ^= splatChar;\r\n                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n                        matches <<= (int)chunkSize;\r\n                        matches |= (ulong)(chunk * extractMagic >> (int)shiftAmount);\r\n                        i -= (int)chunkSize;\r\n                    }\r\n                    while (i >= 0);\r\n                }\r\n                else\r\n                {\r\n                    nuint msb = xFF ^ xFF >> 1;\r\n                    nuint extractMagic = msb / 0x1FF | msb;\r\n                    do\r\n                    {\r\n                        nuint chunk = MEM_readST(&src[i]);\r\n                        chunk ^= splatChar;\r\n                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n                        matches <<= (int)chunkSize;\r\n                        matches |= (ulong)((chunk >> 7) * extractMagic >> (int)shiftAmount);\r\n                        i -= (int)chunkSize;\r\n                    }\r\n                    while (i >= 0);\r\n                }\r\n\r\n                matches = ~matches;\r\n                if (rowEntries == 16)\r\n                {\r\n                    return BitOperations.RotateRight((ushort)matches, (int)head);\r\n                }\r\n                else if (rowEntries == 32)\r\n                {\r\n                    return BitOperations.RotateRight((uint)matches, (int)head);\r\n                }\r\n                else\r\n                {\r\n                    return BitOperations.RotateRight((ulong)matches, (int)head);\r\n                }");
-            builder.AddUsingDirective("System", "System.Numerics");
-            statements.Add(softImplementation);
-
-            return method.WithBody(body
-                .ReplaceNode(returnStatement, statements));
-        });
-    }
-
-    private static List<StatementSyntax>? ConvertSwitchToIfs(SwitchStatementSyntax switchStatement)
-    {
-        var statements = new List<StatementSyntax>();
-        var hasBreak = false;
-        StatementSyntax? defaultStatement = null;
-
-        foreach (var section in switchStatement.Sections)
-        {
-            // goto is not supported
-            if (section.Statements.Any(statement => statement is GotoStatementSyntax))
-            {
-                return null;
-            }
-
-            ExpressionSyntax? condition = null;
-
-            foreach (var label in section.Labels)
-            {
-                if (label is DefaultSwitchLabelSyntax)
-                {
-                    // default label
-                    condition = null;
-                    break;
-                }
-
-                if (label is CaseSwitchLabelSyntax caseSwitchLabelSyntax)
-                {
-                    var labelExpression = SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression, switchStatement.Expression,
-                        caseSwitchLabelSyntax.Value);
-
-                    if (condition == null)
-                    {
-                        condition = labelExpression;
-                    }
-                    else
-                    {
-                        condition = SyntaxFactory.BinaryExpression(SyntaxKind.LogicalOrExpression,
-                            condition, labelExpression);
-                    }
-                }
-            }
-
-            if (condition != null && section.Statements.Any(statement => statement is BreakStatementSyntax))
-            {
-                hasBreak = true;
-            }
-
-            var innerStatements = section.Statements.Where(statement => statement is not BreakStatementSyntax).ToList();
-            var innerStatement = innerStatements.Count switch
-            {
-                0 => null,
-                1 => innerStatements.First(),
-                _ => SyntaxFactory.Block().WithStatements(SyntaxFactory.List(innerStatements))
-            };
-
-            if (condition != null)
-            {
-                statements.Add(SyntaxFactory.IfStatement(condition, innerStatement ?? SyntaxFactory.EmptyStatement()));
-            }
-            else
-            {
-                defaultStatement = innerStatement;
-            }
-        }
-
-        // default to end
-        if (defaultStatement != null)
-        {
-            statements.Add(defaultStatement);
-        }
-
-        // no breaks -> if () {}, ...
-        if (!hasBreak)
-        {
-            return statements;
-        }
-
-        // has break -> if () {} else if (...) else if () ... else ..
-        StatementSyntax? currentStatement = null;
-        foreach (var statement in statements.AsEnumerable().Reverse())
-        {
-            if (currentStatement != null && statement is IfStatementSyntax ifStatementSyntax)
-            {
-                currentStatement = ifStatementSyntax.WithElse(SyntaxFactory.ElseClause(currentStatement));
-            }
-            else
-            {
-                currentStatement = statement;
-            }
-        }
-
-        statements.Clear();
-        if (currentStatement != null)
-        {
-            statements.Add(currentStatement);
-        }
-
-        return statements;
-
-    }
-
-    private static MethodDeclarationSyntax ConvertMethodSwitchToIfs(MethodDeclarationSyntax method)
-    {
-        foreach (var node in method.DescendantNodes())
-        {
-            if (node is SwitchStatementSyntax switchStatement)
-            {
-                var statements = ConvertSwitchToIfs(switchStatement);
-                if (statements == null)
-                {
-                    Console.WriteLine("Failed to convert switch to ifs");
-                    return method;
-                }
-
-                if (switchStatement.Parent is not BlockSyntax &&
-                    !(statements.Count == 1 && statements.FirstOrDefault() is BlockSyntax))
-                {
-                    statements = new List<StatementSyntax>
-                        {SyntaxFactory.Block().WithStatements(SyntaxFactory.List(statements))};
-                }
-
-                return method.ReplaceNode(switchStatement, statements);
-            }
-        }
-
-        return method;
-    }
-
-    private static MethodDeclarationSyntax AddSkipInit(MethodDeclarationSyntax method, string varName)
-    {
-        foreach (var node in method.DescendantNodes())
-        {
-            if (node is LocalDeclarationStatementSyntax localDeclarationStatement)
-            {
-                foreach (var v in localDeclarationStatement.Declaration.Variables)
-                {
-                    if (v.Identifier.ToString() == varName && v.Initializer == null)
-                    {
-                        var callSkipInit = SyntaxFactory.ExpressionStatement(
-                            SyntaxFactory.InvocationExpression(
-                                    SyntaxFactory.IdentifierName("SkipInit"))
-                                .WithArgumentList(
-                                    SyntaxFactory.ArgumentList(
-                                        SyntaxFactory.SingletonSeparatedList(
-                                            SyntaxFactory.Argument(
-                                                    SyntaxFactory.IdentifierName(v.Identifier))
-                                                .WithRefOrOutKeyword(
-                                                    SyntaxFactory.Token(SyntaxKind.OutKeyword))))));
-
-                        method = method.InsertNodesAfter(node, new[] { callSkipInit });
-                        break;
-                    }
-                }
-            }
-        }
-
-        return method;
     }
 
     private async Task GenerateProject(MacroStorage macroStorage)
@@ -623,7 +290,7 @@ public class Generator
 
         var translationUnits = new Dictionary<string, TranslationUnit>();
 
-        await Task.WhenAll(_filenames.Select(async file =>
+        await Task.WhenAll(_fileNames.Select(async file =>
             await Task.Run(() =>
             {
                 var filePath = Path.GetFullPath(Path.Combine(_inputLocation, file));
@@ -680,7 +347,7 @@ public class Generator
             })));
 
         var codeGenerator = new CodeGenerator.CodeGenerator(_projectBuilder);
-        foreach (var file in _filenames)
+        foreach (var file in _fileNames)
         {
             var filePath = Path.GetFullPath(Path.Combine(_inputLocation, file));
             if (translationUnits.TryGetValue(file, out var translationUnit))
@@ -748,7 +415,7 @@ public class Generator
 
     private async Task CollectMacros(MacroStorage macroStorage)
     {
-        await Task.WhenAll(_filenames.Select(async file =>
+        await Task.WhenAll(_fileNames.Select(async file =>
             await Task.Run(() => CollectMacrosForFile(macroStorage, file))));
     }
 }
