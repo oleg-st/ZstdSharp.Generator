@@ -234,14 +234,9 @@ internal class ProjectModifier
 
     public void ModifyProject()
     {
-        /*
-         * 1.5.3:
-         * BIT_highbit32 -> ZSTD_highbit32
-         * FSE_ctz -> ZSTD_countTrailingZeros32
-         * ZSTD_countTrailingZeros -> ZSTD_countTrailingZeros64
-         */
-
         var ctzBody = ParseBody("assert(val != 0);return (uint) BitOperations.TrailingZeroCount(val);");
+        var clzBody = ParseBody("assert(val != 0);return (uint) BitOperations.LeadingZeroCount(val);");
+        var highBitBody = ParseBody("assert(val != 0);return (uint) BitOperations.Log2(val);");
         // 1.5.2
         if (_projectBuilder.HasMethod("ZSTD_countTrailingZeros"))
         {
@@ -260,7 +255,7 @@ internal class ProjectModifier
             ModifyMethod("BIT_highbit32", (builder, method) =>
             {
                 builder.AddUsingDirective("System.Numerics");
-                return method.WithBody(ParseBody("assert(val != 0);return (uint) BitOperations.Log2(val);"));
+                return method.WithBody(highBitBody);
             });
         }
         else
@@ -277,19 +272,36 @@ internal class ProjectModifier
                 builder.AddUsingDirective("System.Numerics");
                 return method.WithBody(ctzBody);
             });
+
+            ModifyMethod("ZSTD_countLeadingZeros32", (builder, method) =>
+            {
+                builder.AddUsingDirective("System.Numerics");
+                return method.WithBody(clzBody);
+            });
+
+            ModifyMethod("ZSTD_countLeadingZeros64", (builder, method) =>
+            {
+                builder.AddUsingDirective("System.Numerics");
+                return method.WithBody(clzBody);
+            });
         }
 
         ModifyMethod("ZSTD_highbit32", (builder, method) =>
         {
             builder.AddUsingDirective("System.Numerics");
-            return method.WithBody(ParseBody("assert(val != 0);return (uint) BitOperations.Log2(val);"));
+            return method.WithBody(highBitBody);
         });
 
         ModifyMethod("ZSTD_NbCommonBytes", (builder, method) =>
         {
             builder.AddUsingDirective("System.Numerics");
             return method.WithBody(ParseBody(
-                "assert(val != 0);if (BitConverter.IsLittleEndian){return (uint)(BitOperations.TrailingZeroCount(val) >> 3);} return (uint)(BitOperations.Log2(val) >> 3);"));
+                "            assert(val != 0);\r\n" +
+                "            if (BitConverter.IsLittleEndian)\r\n" +
+                "            {\r\n" +
+                "                return MEM_64bits ? (uint)BitOperations.TrailingZeroCount(val) >> 3 : (uint)BitOperations.TrailingZeroCount((uint)val) >> 3;\r\n" +
+                "            }\r\n\r\n" +
+                "            return MEM_64bits ? (uint)BitOperations.LeadingZeroCount(val) >> 3 : (uint)BitOperations.LeadingZeroCount((uint)val) >> 3;"));
         });
 
         ModifyMethod("ZSTD_VecMask_next", (builder, method) =>
@@ -298,9 +310,37 @@ internal class ProjectModifier
             return method.WithBody(ctzBody);
         });
 
-        ModifyMethod("XXH_memcpy", (_, method) => method.WithBody(ParseBody("memcpy(dest, src, (uint)size);")));
+        ModifyMethod("XXH_memcpy", (builder, method) =>
+        {
+            builder.AddUsingDirective("static ZstdSharp.UnsafeHelper");
+            return method.WithBody(ParseBody("memcpy(dest, src, (uint)size);"));
+        });
 
-        ModifyMethod("ZSTD_copy16", (_, method) => method.WithBody(ParseBody("memcpy(dst, src, 16);")));
+        ModifyMethod("ZSTD_copy16", (builder, method) =>
+        {
+            builder.AddUsingDirective("System.Runtime.Intrinsics.Arm", "System.Runtime.Intrinsics.X86");
+
+            return method.WithBody(ParseBody(
+                "#if NET5_0_OR_GREATER\r\n" +
+                "            if (AdvSimd.IsSupported)\r\n" +
+                "            {\r\n" +
+                "                AdvSimd.Store((byte*) dst, AdvSimd.LoadVector128((byte*) src));\r\n" +
+                "            } else\r\n" +
+                "#endif\r\n" +
+                "#if NETCOREAPP3_0_OR_GREATER\r\n" +
+                "            if (Sse2.IsSupported)\r\n" +
+                "            {\r\n" +
+                "                Sse2.Store((byte*) dst, Sse2.LoadVector128((byte*) src));\r\n" +
+                "            } else" +
+                "\r\n" +
+                "#endif\r\n" +
+                "            {\r\n" +
+                "                var v1 = System.Runtime.CompilerServices.Unsafe.ReadUnaligned<ulong>((ulong*)src);\r\n" +
+                "                var v2 = System.Runtime.CompilerServices.Unsafe.ReadUnaligned<ulong>((ulong*)src + 1);\r\n" +
+                "                System.Runtime.CompilerServices.Unsafe.WriteUnaligned((ulong*)dst, v1);\r\n" +
+                "                System.Runtime.CompilerServices.Unsafe.WriteUnaligned((ulong*)dst + 1, v2);\r\n" +
+                "            }"));
+        });
 
         ModifyMethod("ZSTD_row_getSSEMask", (_, method) => WrapWithIfDefined(method, "NETCOREAPP3_0_OR_GREATER"));
 
@@ -330,6 +370,7 @@ internal class ProjectModifier
             return method.WithBody(body.InsertNodesBefore(returnStatement, statements));
         });
 
+        // Skip inits
         ModifyMethod("ZSTD_buildSequencesStatistics", (_, method) => AddSkipInit(method, "stats"));
 
         ModifyMethod("ZSTD_compressBlock_opt_generic", (_, method) => AddSkipInit(method, "lastSequence"));
@@ -346,8 +387,10 @@ internal class ProjectModifier
                     !attributeList.Attributes.Any(attribute =>
                         attribute.ToString().Contains("MethodImplOptions.AggressiveInlining"))))));
 
+        // switch to ifs
         ModifyMethod("ZSTD_hashPtr", (_, method) => ConvertMethodSwitchToIfs(method));
 
+        // arm/sse2/soft versions
         ModifyMethod("ZSTD_row_getMatchMask", (builder, method) =>
         {
             string? headParameterName;
@@ -383,14 +426,87 @@ internal class ProjectModifier
 
             // arm implementation
             var armImplementation = ParseBody(
-                $"/* This NEON path only works for little endian - otherwise use SWAR below */\r\n            if (AdvSimd.IsSupported && BitConverter.IsLittleEndian)\r\n            {{\r\n                if (rowEntries == 16)\r\n                {{\r\n                    Vector128<byte> chunk = AdvSimd.LoadVector128(src);\r\n                    Vector128<UInt16> equalMask = AdvSimd.CompareEqual(chunk, AdvSimd.DuplicateToVector128(tag)).As<byte, UInt16>();\r\n                    Vector128<UInt16> t0 = AdvSimd.ShiftLeftLogical(equalMask, 7);\r\n                    Vector128<UInt32> t1 = AdvSimd.ShiftRightAndInsert(t0, t0, 14).As<UInt16, UInt32>();\r\n                    Vector128<UInt64> t2 = AdvSimd.ShiftRightLogical(t1, 14).As<UInt32, UInt64>();\r\n                    Vector128<byte> t3 = AdvSimd.ShiftRightLogicalAdd(t2, t2, 28).As<UInt64, byte>();\r\n                    ushort hi = AdvSimd.Extract(t3, 8);\r\n                    ushort lo = AdvSimd.Extract(t3, 0);\r\n                    return BitOperations.RotateRight((ushort)((hi << 8) | lo), (int){headParameterName});\r\n                }}\r\n                else if (rowEntries == 32)\r\n                {{\r\n                    // todo, there is no vld2q_u16 in c#\r\n                }}\r\n                else\r\n                {{ /* rowEntries == 64 */\r\n                    // todo, there is no vld4q_u8 in c#\r\n                }}\r\n            }}\r\n");
+                $"            /* This NEON path only works for little endian - otherwise use SWAR below */\r\n" +
+                $"            if (AdvSimd.IsSupported && BitConverter.IsLittleEndian)\r\n" +
+                $"            {{\r\n" +
+                $"                if (rowEntries == 16)\r\n" +
+                $"                {{\r\n" +
+                $"                    Vector128<byte> chunk = AdvSimd.LoadVector128(src);\r\n" +
+                $"                    Vector128<UInt16> equalMask = AdvSimd.CompareEqual(chunk, AdvSimd.DuplicateToVector128(tag)).As<byte, UInt16>();\r\n" +
+                $"                    Vector128<UInt16> t0 = AdvSimd.ShiftLeftLogical(equalMask, 7);\r\n" +
+                $"                    Vector128<UInt32> t1 = AdvSimd.ShiftRightAndInsert(t0, t0, 14).As<UInt16, UInt32>();\r\n" +
+                $"                    Vector128<UInt64> t2 = AdvSimd.ShiftRightLogical(t1, 14).As<UInt32, UInt64>();\r\n" +
+                $"                    Vector128<byte> t3 = AdvSimd.ShiftRightLogicalAdd(t2, t2, 28).As<UInt64, byte>();\r\n" +
+                $"                    ushort hi = AdvSimd.Extract(t3, 8);\r\n" +
+                $"                    ushort lo = AdvSimd.Extract(t3, 0);\r\n" +
+                $"                    return BitOperations.RotateRight((ushort)((hi << 8) | lo), (int){headParameterName});\r\n" +
+                $"                }}\r\n" +
+                $"                else if (rowEntries == 32)\r\n" +
+                $"                {{\r\n" +
+                $"                    // todo, there is no vld2q_u16 in c#\r\n" +
+                $"                }}\r\n" +
+                $"                else\r\n" +
+                $"                {{ /* rowEntries == 64 */\r\n" +
+                $"                    // todo, there is no vld4q_u8 in c#\r\n" +
+                $"                }}\r\n" +
+                $"            }}\r\n");
             builder.AddUsingDirective("System.Runtime.Intrinsics.Arm");
             var armImplementationStatements = WrapWithIfDefined(armImplementation.Statements, "NET5_0_OR_GREATER");
             statements.AddRange(armImplementationStatements);
 
             // soft implementation
             var softImplementation = ParseBody(
-                $"nuint chunkSize = (nuint)sizeof(nuint);\r\n                nuint shiftAmount = chunkSize * 8 - chunkSize;\r\n                nuint xFF = ~(nuint)0;\r\n                nuint x01 = xFF / 0xFF;\r\n                nuint x80 = x01 << 7;\r\n                nuint splatChar = tag * x01;\r\n                ulong matches = 0;\r\n                int i = (int)(rowEntries - chunkSize);\r\n                assert(sizeof(nuint) == 4 || sizeof(nuint) == 8);\r\n                if (BitConverter.IsLittleEndian)\r\n                {{\r\n                    nuint extractMagic = xFF / 0x7F >> (int)chunkSize;\r\n                    do\r\n                    {{\r\n                        nuint chunk = MEM_readST(&src[i]);\r\n                        chunk ^= splatChar;\r\n                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n                        matches <<= (int)chunkSize;\r\n                        matches |= (ulong)(chunk * extractMagic >> (int)shiftAmount);\r\n                        i -= (int)chunkSize;\r\n                    }}\r\n                    while (i >= 0);\r\n                }}\r\n                else\r\n                {{\r\n                    nuint msb = xFF ^ xFF >> 1;\r\n                    nuint extractMagic = msb / 0x1FF | msb;\r\n                    do\r\n                    {{\r\n                        nuint chunk = MEM_readST(&src[i]);\r\n                        chunk ^= splatChar;\r\n                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n                        matches <<= (int)chunkSize;\r\n                        matches |= (ulong)((chunk >> 7) * extractMagic >> (int)shiftAmount);\r\n                        i -= (int)chunkSize;\r\n                    }}\r\n                    while (i >= 0);\r\n                }}\r\n\r\n                matches = ~matches;\r\n                if (rowEntries == 16)\r\n                {{\r\n                    return BitOperations.RotateRight((ushort)matches, (int){headParameterName});\r\n                }}\r\n                else if (rowEntries == 32)\r\n                {{\r\n                    return BitOperations.RotateRight((uint)matches, (int){headParameterName});\r\n                }}\r\n                else\r\n                {{\r\n                    return BitOperations.RotateRight((ulong)matches, (int){headParameterName});\r\n                }}");
+                $"                nuint chunkSize = (nuint)sizeof(nuint);\r\n" +
+                $"                nuint shiftAmount = chunkSize * 8 - chunkSize;\r\n" +
+                $"                nuint xFF = ~(nuint)0;\r\n" +
+                $"                nuint x01 = xFF / 0xFF;\r\n" +
+                $"                nuint x80 = x01 << 7;\r\n" +
+                $"                nuint splatChar = tag * x01;\r\n" +
+                $"                ulong matches = 0;\r\n" +
+                $"                int i = (int)(rowEntries - chunkSize);\r\n" +
+                $"                assert(sizeof(nuint) == 4 || sizeof(nuint) == 8);\r\n" +
+                $"                if (BitConverter.IsLittleEndian)\r\n" +
+                $"                {{\r\n" +
+                $"                    nuint extractMagic = xFF / 0x7F >> (int)chunkSize;\r\n" +
+                $"                    do\r\n" +
+                $"                    {{\r\n" +
+                $"                        nuint chunk = MEM_readST(&src[i]);\r\n" +
+                $"                        chunk ^= splatChar;\r\n" +
+                $"                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n" +
+                $"                        matches <<= (int)chunkSize;\r\n" +
+                $"                        matches |= (ulong)(chunk * extractMagic >> (int)shiftAmount);\r\n" +
+                $"                        i -= (int)chunkSize;\r\n" +
+                $"                    }}\r\n" +
+                $"                    while (i >= 0);\r\n" +
+                $"                }}\r\n" +
+                $"                else\r\n" +
+                $"                {{\r\n" +
+                $"                    nuint msb = xFF ^ xFF >> 1;\r\n" +
+                $"                    nuint extractMagic = msb / 0x1FF | msb;\r\n" +
+                $"                    do\r\n" +
+                $"                    {{\r\n" +
+                $"                        nuint chunk = MEM_readST(&src[i]);\r\n" +
+                $"                        chunk ^= splatChar;\r\n" +
+                $"                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n" +
+                $"                        matches <<= (int)chunkSize;\r\n" +
+                $"                        matches |= (ulong)((chunk >> 7) * extractMagic >> (int)shiftAmount);\r\n" +
+                $"                        i -= (int)chunkSize;\r\n" +
+                $"                    }}\r\n" +
+                $"                    while (i >= 0);\r\n" +
+                $"                }}\r\n\r\n" +
+                $"                matches = ~matches;\r\n" +
+                $"                if (rowEntries == 16)\r\n" +
+                $"                {{\r\n" +
+                $"                    return BitOperations.RotateRight((ushort)matches, (int){headParameterName});\r\n" +
+                $"                }}\r\n" +
+                $"                else if (rowEntries == 32)\r\n" +
+                $"                {{\r\n" +
+                $"                    return BitOperations.RotateRight((uint)matches, (int){headParameterName});\r\n" +
+                $"                }}\r\n" +
+                $"                else\r\n" +
+                $"                {{\r\n" +
+                $"                    return BitOperations.RotateRight((ulong)matches, (int){headParameterName});\r\n" +
+                $"                }}");
             builder.AddUsingDirective("System", "System.Numerics");
             statements.Add(softImplementation);
 

@@ -119,7 +119,7 @@ public class Generator
             // ErrorPrivate
             "_force_has_format_string",
             // 1.5.3
-            "ZSTD_cpuSupportsBmi2", "ZSTD_countTrailingZeros32_fallback", "ZSTD_countLeadingZeros32_fallback", "ZSTD_countLeadingZeros32", "ZSTD_countLeadingZeros64",
+            "ZSTD_cpuSupportsBmi2", "ZSTD_countTrailingZeros32_fallback", "ZSTD_countLeadingZeros32_fallback", 
         };
         var callReplacements = new Dictionary<string, CallReplacer.CallReplacement>
         {
@@ -210,10 +210,8 @@ public class Generator
             // 1.5.2
             "BIT_lookBitsFast", "BIT_skipBits", "BIT_reloadDStreamFast", "HUF_decodeSymbolX2",
             "HUF_setNbBits", "HUF_setValue",
-            // 
-            //"BIT_reloadDStream", 
-            //"ERR_isError", 
-            //"ZSTD_decodeSequence",
+            // 1.5.3
+            "ZSTD_copy16",
         };
 
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation, remappedNames: remappedNames,
