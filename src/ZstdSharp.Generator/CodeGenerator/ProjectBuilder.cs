@@ -123,7 +123,11 @@ internal class ProjectBuilder
     public async Task Save()
     {
         // clean and create output directory
-        Directory.Delete(Config.OutputLocation, true);
+        if (Directory.Exists(Config.OutputLocation))
+        {
+            Directory.Delete(Config.OutputLocation, true);
+        }
+
         Directory.CreateDirectory(Config.OutputLocation);
 
         // build files

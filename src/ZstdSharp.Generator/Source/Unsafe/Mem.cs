@@ -18,9 +18,17 @@ namespace ZstdSharp.Unsafe
          * but unfortunately reduces inlining in .NET 5 or below
         *****************************************************************/
         /*=== Static platform detection ===*/
-        public static bool MEM_32bits => sizeof(nint) == 4;
+        public static bool MEM_32bits
+        {
+            [InlineMethod.Inline]
+            get => sizeof(nint) == 4;
+        }
 
-        public static bool MEM_64bits => sizeof(nint) == 8;
+        public static bool MEM_64bits
+        {
+            [InlineMethod.Inline]
+            get => sizeof(nint) == 8;
+        }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         /* default method, safe and standard.
@@ -111,14 +119,14 @@ namespace ZstdSharp.Unsafe
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [InlineMethod.Inline]
         private static uint MEM_readLE24(void* memPtr) =>
-            (uint) (MEM_readLE16(memPtr) + (((byte*) memPtr)[2] << 16));
+            (uint)(MEM_readLE16(memPtr) + (((byte*)memPtr)[2] << 16));
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [InlineMethod.Inline]
         private static void MEM_writeLE24(void* memPtr, uint val)
         {
-            MEM_writeLE16(memPtr, (ushort) val);
-            ((byte*) memPtr)[2] = (byte) (val >> 16);
+            MEM_writeLE16(memPtr, (ushort)val);
+            ((byte*)memPtr)[2] = (byte)(val >> 16);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -513,5 +513,192 @@ internal class ProjectModifier
             return method.WithBody(body
                 .ReplaceNode(returnStatement, statements));
         });
+
+        if (_projectBuilder.HasMethod("ZSTD_searchMax"))
+        {
+            // replace switches with ifs, remove unreachable branches
+            ModifyMethod("ZSTD_searchMax",
+                (_, method) => method
+                    .WithBody(ParseBody(@"
+            if (dictMode == ZSTD_dictMode_e.ZSTD_noDict)
+            {
+                if (searchMethod == searchMethod_e.search_rowHash)
+                {
+                    if (mls == 4)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_noDict_4_4(ms, ip, iend, offsetPtr);
+                        return rowLog == 5 ? ZSTD_RowFindBestMatch_noDict_4_5(ms, ip, iend, offsetPtr) : ZSTD_RowFindBestMatch_noDict_4_6(ms, ip, iend, offsetPtr);
+                    }
+
+                    if (mls == 5)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_noDict_5_4(ms, ip, iend, offsetPtr);
+                        return rowLog == 5 ? ZSTD_RowFindBestMatch_noDict_5_5(ms, ip, iend, offsetPtr) : ZSTD_RowFindBestMatch_noDict_5_6(ms, ip, iend, offsetPtr);
+                    }
+
+                    if (rowLog == 4)
+                        return ZSTD_RowFindBestMatch_noDict_6_4(ms, ip, iend, offsetPtr);
+                    return rowLog == 5 ? ZSTD_RowFindBestMatch_noDict_6_5(ms, ip, iend, offsetPtr) : ZSTD_RowFindBestMatch_noDict_6_6(ms, ip, iend, offsetPtr);
+                }
+
+                if (searchMethod == searchMethod_e.search_hashChain)
+                {
+                    if (mls == 4)
+                        return ZSTD_HcFindBestMatch_noDict_4(ms, ip, iend, offsetPtr);
+                    return mls == 5 ? ZSTD_HcFindBestMatch_noDict_5(ms, ip, iend, offsetPtr) : ZSTD_HcFindBestMatch_noDict_6(ms, ip, iend, offsetPtr);
+                }
+
+                // searchMethod_e.search_binaryTree
+                if (mls == 4)
+                    return ZSTD_BtFindBestMatch_noDict_4(ms, ip, iend, offsetPtr);
+                return mls == 5 ? ZSTD_BtFindBestMatch_noDict_5(ms, ip, iend, offsetPtr) : ZSTD_BtFindBestMatch_noDict_6(ms, ip, iend, offsetPtr);
+            }
+
+            if (dictMode == ZSTD_dictMode_e.ZSTD_extDict)
+            {
+                if (searchMethod == searchMethod_e.search_rowHash)
+                {
+                    if (mls == 4)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_extDict_4_4(ms, ip, iend, offsetPtr);
+                        if (rowLog == 5)
+                            return ZSTD_RowFindBestMatch_extDict_4_5(ms, ip, iend, offsetPtr);
+                        return ZSTD_RowFindBestMatch_extDict_4_6(ms, ip, iend, offsetPtr);
+                    }
+
+                    if (mls == 5)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_extDict_5_4(ms, ip, iend, offsetPtr);
+                        if (rowLog == 5)
+                            return ZSTD_RowFindBestMatch_extDict_5_5(ms, ip, iend, offsetPtr);
+                        return ZSTD_RowFindBestMatch_extDict_5_6(ms, ip, iend, offsetPtr);
+                    }
+
+                    if (mls == 6)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_extDict_6_4(ms, ip, iend, offsetPtr);
+                        if (rowLog == 5)
+                            return ZSTD_RowFindBestMatch_extDict_6_5(ms, ip, iend, offsetPtr);
+                        return ZSTD_RowFindBestMatch_extDict_6_6(ms, ip, iend, offsetPtr);
+                    }
+                }
+
+                if (searchMethod == searchMethod_e.search_hashChain)
+                {
+                    if (mls == 4)
+                        return ZSTD_HcFindBestMatch_extDict_4(ms, ip, iend, offsetPtr);
+                    if (mls == 5)
+                        return ZSTD_HcFindBestMatch_extDict_5(ms, ip, iend, offsetPtr);
+                    return ZSTD_HcFindBestMatch_extDict_6(ms, ip, iend, offsetPtr);
+                }
+
+                // searchMethod_e.search_binaryTree
+                if (mls == 4)
+                    return ZSTD_BtFindBestMatch_extDict_4(ms, ip, iend, offsetPtr);
+                if (mls == 5)
+                    return ZSTD_BtFindBestMatch_extDict_5(ms, ip, iend, offsetPtr);
+                return ZSTD_BtFindBestMatch_extDict_6(ms, ip, iend, offsetPtr);
+            }
+
+            if (dictMode == ZSTD_dictMode_e.ZSTD_dictMatchState)
+            {
+                if (searchMethod == searchMethod_e.search_rowHash)
+                {
+                    if (mls == 4)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_dictMatchState_4_4(ms, ip, iend, offsetPtr);
+                        if (rowLog == 5)
+                            return ZSTD_RowFindBestMatch_dictMatchState_4_5(ms, ip, iend, offsetPtr);
+                        return ZSTD_RowFindBestMatch_dictMatchState_4_6(ms, ip, iend, offsetPtr);
+                    }
+
+                    if (mls == 5)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_dictMatchState_5_4(ms, ip, iend, offsetPtr);
+                        if (rowLog == 5)
+                            return ZSTD_RowFindBestMatch_dictMatchState_5_5(ms, ip, iend, offsetPtr);
+                        return ZSTD_RowFindBestMatch_dictMatchState_5_6(ms, ip, iend, offsetPtr);
+                    }
+
+                    if (mls == 6)
+                    {
+                        if (rowLog == 4)
+                            return ZSTD_RowFindBestMatch_dictMatchState_6_4(ms, ip, iend, offsetPtr);
+                        if (rowLog == 5)
+                            return ZSTD_RowFindBestMatch_dictMatchState_6_5(ms, ip, iend, offsetPtr);
+                        return ZSTD_RowFindBestMatch_dictMatchState_6_6(ms, ip, iend, offsetPtr);
+                    }
+                }
+
+                if (searchMethod == searchMethod_e.search_hashChain)
+                {
+                    if (mls == 4)
+                        return ZSTD_HcFindBestMatch_dictMatchState_4(ms, ip, iend, offsetPtr);
+                    if (mls == 5)
+                        return ZSTD_HcFindBestMatch_dictMatchState_5(ms, ip, iend, offsetPtr);
+                    return ZSTD_HcFindBestMatch_dictMatchState_6(ms, ip, iend, offsetPtr);
+                }
+
+                // search_binaryTree
+                if (mls == 4)
+                    return ZSTD_BtFindBestMatch_dictMatchState_4(ms, ip, iend, offsetPtr);
+                if (mls == 5)
+                    return ZSTD_BtFindBestMatch_dictMatchState_5(ms, ip, iend, offsetPtr);
+                return ZSTD_BtFindBestMatch_dictMatchState_6(ms, ip, iend, offsetPtr);
+            }
+
+            if (searchMethod == searchMethod_e.search_rowHash)
+            {
+                if (mls == 4)
+                {
+                    if (rowLog == 4)
+                        return ZSTD_RowFindBestMatch_dedicatedDictSearch_4_4(ms, ip, iend, offsetPtr);
+                    if (rowLog == 5)
+                        return ZSTD_RowFindBestMatch_dedicatedDictSearch_4_5(ms, ip, iend, offsetPtr);
+                    return ZSTD_RowFindBestMatch_dedicatedDictSearch_4_6(ms, ip, iend, offsetPtr);
+                }
+
+                if (mls == 5)
+                {
+                    if (rowLog == 4)
+                        return ZSTD_RowFindBestMatch_dedicatedDictSearch_5_4(ms, ip, iend, offsetPtr);
+                    if (rowLog == 5)
+                        return ZSTD_RowFindBestMatch_dedicatedDictSearch_5_5(ms, ip, iend, offsetPtr);
+                    return ZSTD_RowFindBestMatch_dedicatedDictSearch_5_6(ms, ip, iend, offsetPtr);
+                }
+
+                if (mls == 6)
+                {
+                    if (rowLog == 4)
+                        return ZSTD_RowFindBestMatch_dedicatedDictSearch_6_4(ms, ip, iend, offsetPtr);
+                    if (rowLog == 5)
+                        return ZSTD_RowFindBestMatch_dedicatedDictSearch_6_5(ms, ip, iend, offsetPtr);
+                    return ZSTD_RowFindBestMatch_dedicatedDictSearch_6_6(ms, ip, iend, offsetPtr);
+                }
+            }
+
+            if (searchMethod == searchMethod_e.search_hashChain)
+            {
+                if (mls == 4)
+                    return ZSTD_HcFindBestMatch_dedicatedDictSearch_4(ms, ip, iend, offsetPtr);
+                if (mls == 5)
+                    return ZSTD_HcFindBestMatch_dedicatedDictSearch_5(ms, ip, iend, offsetPtr);
+                return ZSTD_HcFindBestMatch_dedicatedDictSearch_6(ms, ip, iend, offsetPtr);
+            }
+
+            // searchMethod_e.search_binaryTree
+            if (mls == 4)
+                return ZSTD_BtFindBestMatch_dedicatedDictSearch_4(ms, ip, iend, offsetPtr);
+            if (mls == 5)
+                return ZSTD_BtFindBestMatch_dedicatedDictSearch_5(ms, ip, iend, offsetPtr);
+            return ZSTD_BtFindBestMatch_dedicatedDictSearch_6(ms, ip, iend, offsetPtr);")));
+        }
     }
 }

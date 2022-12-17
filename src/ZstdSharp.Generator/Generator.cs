@@ -120,6 +120,8 @@ public class Generator
             "_force_has_format_string",
             // 1.5.3
             "ZSTD_cpuSupportsBmi2", "ZSTD_countTrailingZeros32_fallback", "ZSTD_countLeadingZeros32_fallback", 
+            // xxhash memory
+            "XXH_read32", "XXH_read64",
         };
         var callReplacements = new Dictionary<string, CallReplacer.CallReplacement>
         {
@@ -180,6 +182,11 @@ public class Generator
             {"_mm_movemask_epi8", new CallReplacer.CallReplacementInvocation("Sse2.MoveMask", TypeCaster.IntegerType.Create("int"), "System.Runtime.Intrinsics.X86")},
             // fastcover
             {"clock", new CallReplacer.CallReplacementRemove()},
+            // remove
+            {"__builtin_unreachable", new CallReplacer.CallReplacementRemove()},
+            // xxhash memory
+            {"XXH_read32", new CallReplacer.CallReplacementInvocation("MEM_read32", TypeCaster.IntegerType.Create("uint"), argumentTypes: new TypeCaster.CustomType[] { new TypeCaster.PointerType("void*") })},
+            {"XXH_read64", new CallReplacer.CallReplacementInvocation("MEM_read64", TypeCaster.IntegerType.Create("ulong"), argumentTypes: new TypeCaster.CustomType[] { new TypeCaster.PointerType("void*") })},
         };
         var traversalNames = new DirectoryInfo(_inputLocation)
             .GetFiles("*", SearchOption.AllDirectories)
@@ -212,6 +219,9 @@ public class Generator
             "HUF_setNbBits", "HUF_setValue",
             // 1.5.3
             "ZSTD_copy16",
+            // 
+            "BIT_endOfDStream", "FSE_decodeSymbol", "HUF_decodeSymbolX1", "ZSTD_decodeSequence",
+            "XXH_readBE32", "XXH_readBE64",
         };
 
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation, remappedNames: remappedNames,
