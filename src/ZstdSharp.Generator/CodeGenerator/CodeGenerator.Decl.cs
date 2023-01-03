@@ -328,6 +328,15 @@ internal partial class CodeGenerator
             }
         }
 
+        // int[,] x = new int[X][] { new int[Y] { ... }, ... } -> int[,] x = { { ... }, ... }
+        if (Config.ConvertNestedArraysToMultidimensional &&
+            initializer is ArrayCreationExpressionSyntax &&
+            cSharpType is ArrayTypeSyntax {RankSpecifiers.Count: 1} arrayTypeSyntax &&
+            arrayTypeSyntax.RankSpecifiers[0].Rank > 1)
+        {
+            initializer = ArrayCreationToInitializer(initializer, arrayTypeSyntax.RankSpecifiers[0].Rank);
+        }
+
         var variableDeclarationSyntax = SyntaxFactory.VariableDeclaration(
             cSharpType,
             SyntaxFactory.SingletonSeparatedList(

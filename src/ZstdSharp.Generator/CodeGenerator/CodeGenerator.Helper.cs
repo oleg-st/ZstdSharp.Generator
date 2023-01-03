@@ -313,12 +313,25 @@ internal partial class CodeGenerator
                     }
                     else
                     {
-                        cSharpType = SyntaxFactory.ArrayType(innerType)
-                            .WithRankSpecifiers(
-                                SyntaxFactory.SingletonList(
-                                    SyntaxFactory.ArrayRankSpecifier(
-                                        SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(
-                                            SyntaxFactory.OmittedArraySizeExpression()))));
+                        // int[][] x -> int[,] x
+                        if (Config.ConvertNestedArraysToMultidimensional && innerType is ArrayTypeSyntax {RankSpecifiers.Count: 1} arrayTypeSyntax)
+                        {
+                            cSharpType = SyntaxFactory.ArrayType(arrayTypeSyntax.ElementType)
+                                .WithRankSpecifiers(
+                                    SyntaxFactory.SingletonList(
+                                        arrayTypeSyntax.RankSpecifiers[0].AddSizes(
+                                            SyntaxFactory.OmittedArraySizeExpression()
+                                        )));
+                        }
+                        else
+                        {
+                            cSharpType = SyntaxFactory.ArrayType(innerType)
+                                .WithRankSpecifiers(
+                                    SyntaxFactory.SingletonList(
+                                        SyntaxFactory.ArrayRankSpecifier(
+                                            SyntaxFactory.SingletonSeparatedList<ExpressionSyntax>(
+                                                SyntaxFactory.OmittedArraySizeExpression()))));
+                        }
                     }
 
                     break;
@@ -668,5 +681,38 @@ internal partial class CodeGenerator
 
         // ! x -> !x
         return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expression));
+    }
+
+    public ExpressionSyntax ArrayCreationToInitializer(ExpressionSyntax expression, int rank)
+    {
+        var ret = expression;
+
+        if (rank <= 0)
+        {
+            return ret;
+        }
+
+        // remove array creation
+        // new int[X] { ... } -> { ... }
+        if (ret is ArrayCreationExpressionSyntax {Initializer: { }} arrayCreationExpression)
+        {
+            ret = arrayCreationExpression.Initializer;
+            rank--;
+            if (rank <= 0)
+            {
+                return ret;
+            }
+        }
+
+        // remove array creation inside
+        if (ret is InitializerExpressionSyntax initializerExpression)
+        {
+            // { new int[X} { ... }, ... } -> { { ... }, ... }
+            return SyntaxFactory.InitializerExpression(SyntaxKind.ArrayInitializerExpression,
+                SyntaxFactory.SeparatedList(
+                    initializerExpression.Expressions.Select(e => ArrayCreationToInitializer(e, rank))));
+        }
+
+        return ret;
     }
 }

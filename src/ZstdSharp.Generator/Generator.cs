@@ -226,7 +226,7 @@ public class Generator
 
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation, remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
-            callReplacements: callReplacements, structToClasses: structToClasses);
+            callReplacements: callReplacements, structToClasses: structToClasses, convertNestedArraysToMultidimensional: true);
     }
 
     public async Task Generate()

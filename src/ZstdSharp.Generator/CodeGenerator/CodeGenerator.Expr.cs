@@ -43,6 +43,27 @@ internal partial class CodeGenerator
             _ => UnsupportedNodeType(expr)
         };
 
+        // x[a][b] -> x[a, b]
+        if (Config.ConvertNestedArraysToMultidimensional && node is ElementAccessExpressionSyntax elementAccessExpression)
+        {
+            var argumentList = elementAccessExpression.ArgumentList;
+            var argumentSyntaxList = new List<ArgumentSyntax>(argumentList.Arguments);
+            var p = elementAccessExpression.Expression;
+
+            while (p is ElementAccessExpressionSyntax pElementAccessExpression)
+            {
+                var pArgumentList = pElementAccessExpression.ArgumentList;
+                argumentSyntaxList.InsertRange(0, pArgumentList.Arguments);
+                p = pElementAccessExpression.Expression;
+            }
+
+            if (argumentSyntaxList.Count > 1)
+            {
+                node = SyntaxFactory.ElementAccessExpression(p,
+                    SyntaxFactory.BracketedArgumentList(SyntaxFactory.SeparatedList(argumentSyntaxList)));
+            }
+        }
+
         if (node is ExpressionSyntax)
         {
             var casts = _typeCaster.GetCasts(expr);
@@ -203,7 +224,6 @@ internal partial class CodeGenerator
 
                 return stmt is IntegerLiteral { Value: 0 };
             }
-
         }
 
         ExpressionSyntax ForRecordType(InitListExpr innerInitListExpr, RecordType recordType)
