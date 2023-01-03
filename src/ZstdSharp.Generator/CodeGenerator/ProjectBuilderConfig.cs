@@ -17,6 +17,7 @@ internal class ProjectBuilderConfig
     public IReadOnlySet<string> ExcludedNames { get; }
     public IReadOnlySet<string> TraversalNames { get; }
     public IReadOnlySet<string> InlineMethods { get; }
+    public IReadOnlySet<string> ExcludeFunctionPointers { get; }
 
     public bool UseFunctionPointers { get; }
 
@@ -28,7 +29,10 @@ internal class ProjectBuilderConfig
         IReadOnlySet<string>? traversalNames = null, IReadOnlySet<string>? inlineMethods = null,
         IReadOnlyDictionary<string, CallReplacer.CallReplacement>? callReplacements = null,
         IReadOnlySet<string>? structToClasses = null,
-        bool useFunctionPointers = true, bool convertNestedArraysToMultidimensional = false)
+        bool useFunctionPointers = true, 
+        IReadOnlySet<string>? excludeFunctionPointers = null,
+
+    bool convertNestedArraysToMultidimensional = false)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -43,6 +47,7 @@ internal class ProjectBuilderConfig
                            ImmutableDictionary<string, CallReplacer.CallReplacement>.Empty;
         StructToClasses = structToClasses ?? ImmutableHashSet<string>.Empty;
         UseFunctionPointers = useFunctionPointers;
+        ExcludeFunctionPointers = excludeFunctionPointers ?? ImmutableHashSet<string>.Empty;
         ConvertNestedArraysToMultidimensional = convertNestedArraysToMultidimensional;
     }
 }

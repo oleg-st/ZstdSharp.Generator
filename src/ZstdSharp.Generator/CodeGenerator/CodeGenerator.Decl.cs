@@ -685,7 +685,7 @@ internal partial class CodeGenerator
             var name = GetTypeFileName(typedefDecl);
             var escapedName = EscapeName(name);
 
-            if (Config.UseFunctionPointers)
+            if (UseFunctionPointerForType(name))
             {
                 return;
             }

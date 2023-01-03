@@ -224,9 +224,17 @@ public class Generator
             "XXH_readBE32", "XXH_readBE64",
         };
 
-        return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation, remappedNames: remappedNames,
+        // inside of nested arrays, don't work in Mono (Android)
+        var excludeFunctionPointers = new HashSet<string>
+        {
+            "ZSTD_getAllMatchesFn", "ZSTD_blockCompressor",
+        };
+
+        return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
+            remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
-            callReplacements: callReplacements, structToClasses: structToClasses, convertNestedArraysToMultidimensional: true);
+            callReplacements: callReplacements, structToClasses: structToClasses,
+            excludeFunctionPointers: excludeFunctionPointers);
     }
 
     public async Task Generate()

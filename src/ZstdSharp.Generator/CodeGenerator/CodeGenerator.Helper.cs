@@ -281,6 +281,7 @@ internal partial class CodeGenerator
     }
 
     private TypeSyntax GetCSharpType(Cursor cursor, Type type, out bool arrayConvertedToPointer,
+        int arrayLevel = 0,
         bool innerPointer = false,
         bool useTypeDef = false, bool canConvertArrayToPointer = true)
     {
@@ -298,7 +299,7 @@ internal partial class CodeGenerator
         {
             case ArrayType arrayType:
                 {
-                    var elementType = GetCSharpType(cursor, arrayType.ElementType, out _, useTypeDef: true, canConvertArrayToPointer: false);
+                    var elementType = GetCSharpType(cursor, arrayType.ElementType, out _, useTypeDef: true, canConvertArrayToPointer: false, arrayLevel: arrayLevel + 1);
                     var innerType = GetType(GetRemappedName(elementType.ToString()));
 
                     if (canConvertArrayToPointer && (cursor is FunctionDecl or ParmVarDecl || innerPointer ||
@@ -445,7 +446,13 @@ internal partial class CodeGenerator
                     {
                         if (typedefType.Decl.UnderlyingType is PointerType { PointeeType: FunctionProtoType functionProtoType })
                         {
-                            cSharpType = Config.UseFunctionPointers ? GetFunctionPointerType(cursor, functionProtoType) : GetType(name);
+                            var useFunctionPointer = UseFunctionPointerForType(name);
+                            if (useFunctionPointer && arrayLevel > 1)
+                            {
+                                _reporter.Report(DiagnosticLevel.Warning, $"Nested array with function pointer {name}");
+                            }
+
+                            cSharpType = useFunctionPointer ? GetFunctionPointerType(cursor, functionProtoType) : GetType(name);
                         }
                         else if ((innerPointer || useTypeDef) &&
                                  typedefType.Decl.UnderlyingType is ConstantArrayType constantArrayType)
@@ -683,7 +690,7 @@ internal partial class CodeGenerator
         return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression, SyntaxFactory.ParenthesizedExpression(expression));
     }
 
-    public ExpressionSyntax ArrayCreationToInitializer(ExpressionSyntax expression, int rank)
+    internal ExpressionSyntax ArrayCreationToInitializer(ExpressionSyntax expression, int rank)
     {
         var ret = expression;
 
@@ -715,4 +722,7 @@ internal partial class CodeGenerator
 
         return ret;
     }
+
+    internal bool UseFunctionPointerForType(string name) 
+        => Config.UseFunctionPointers && !Config.ExcludeFunctionPointers.Contains(name);
 }

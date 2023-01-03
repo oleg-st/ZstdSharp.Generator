@@ -567,13 +567,6 @@ internal partial class CodeGenerator
             return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
         }
 
-        if (Config.UseFunctionPointers && implicitCastExpr.CastKind == CX_CastKind.CX_CK_FunctionToPointerDecay &&
-            !GetPrevContext<CallExpr>(out _))
-        {
-            return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,
-                Visit<ExpressionSyntax>(implicitCastExpr.SubExpr)!);
-        }
-
         return Visit(implicitCastExpr.SubExpr);
     }
 

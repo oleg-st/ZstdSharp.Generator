@@ -161,10 +161,10 @@ internal class TypeCaster
                 return node;
             }
 
-            // &function to function pointer
-            if (Target is FunctionPointerType && node is PrefixUnaryExpressionSyntax prefixUnaryExpressionSyntax2 && prefixUnaryExpressionSyntax2.Kind() == SyntaxKind.AddressOfExpression)
+            // function to function pointer -> &function
+            if (codeGenerator.UseFunctionPointerForType(Target.Name) && Target is FunctionPointerType && node is IdentifierNameSyntax)
             {
-                return node;
+                return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression, node);
             }
 
             // (type)node
@@ -1018,16 +1018,22 @@ internal class TypeCaster
             CastTo(expr, l, varType, true);
         } else if (_codeGenerator.GetPrevContext<InitListExpr>(out var initListExpr))
         {
-            // record init to field type
-            var index = initListExpr.Inits.IndexOf(expr);
-            if (index >= 0)
+            var type = GetInnerType(initListExpr.Type);
+            if (type is ClangSharp.RecordType recordType)
             {
-                var type = GetInnerType(initListExpr.Type);
-                if (type is ClangSharp.RecordType recordType)
+                // record init to field type
+                var index = initListExpr.Inits.IndexOf(expr);
+                if (index >= 0)
                 {
                     var varType = GetCustomType(expr, recordType.Decl.Fields[index].Type);
                     CastTo(expr, l, varType, true);
                 }
+            }
+            else if (type is ArrayType arrayType)
+            {
+                // array init to array element type
+                var elementType = GetCustomType(expr, arrayType.ElementType);
+                CastTo(expr, l, elementType, true);
             }
         }
     }
