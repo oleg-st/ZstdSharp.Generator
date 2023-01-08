@@ -227,7 +227,7 @@ internal partial class CodeGenerator
                 {
                     if (currentSectionSyntax != null)
                     {
-                        if (fallThrough && currentSectionSyntax.Labels.Any())
+                        if (fallThrough && currentSectionSyntax.Statements.Any() && currentSectionSyntax.Labels.Any())
                         {
                             var firstLabel = switchSectionSyntax.Labels.First();
 
