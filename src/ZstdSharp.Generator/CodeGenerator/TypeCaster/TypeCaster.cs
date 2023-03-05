@@ -210,12 +210,6 @@ internal class TypeCaster
 
     public class NegateBoolType : BoolType
     {
-        public Expr? SubExpr { get; }
-
-        public NegateBoolType(Expr? subExpr)
-        {
-            SubExpr = subExpr;
-        }
     }
 
     public class LogicalBinaryType : BoolType
@@ -694,7 +688,7 @@ internal class TypeCaster
 
                 if (l is IntegerType or EnumType or PointerType)
                 {
-                    CastTo(expr, l, new NegateBoolType(unaryOperator.SubExpr));
+                    CastTo(expr, l, new NegateBoolType());
                 }
 
                 return new BoolType();
@@ -734,12 +728,36 @@ internal class TypeCaster
             var l = GetExprType(conditionalOperator.LHS);
             var r = GetExprType(conditionalOperator.RHS);
 
+            // todo FIXME
+            var lt = GetCustomType(conditionalOperator.LHS, conditionalOperator.LHS.Type);
+            var rt = GetCustomType(conditionalOperator.LHS, conditionalOperator.LHS.Type);
+
+            if (lt is FunctionPointerType)
+            {
+                CastTo(conditionalOperator.LHS, l, lt);
+            }
+
+            if (rt is FunctionPointerType)
+            {
+                CastTo(conditionalOperator.RHS, r, rt);
+            }
+
             if (l is BoolType && r is IntegerType)
             {
                 CastTo(conditionalOperator.LHS, l, r);
             }
 
             if (r is BoolType && l is IntegerType)
+            {
+                CastTo(conditionalOperator.RHS, r, l);
+            }
+
+            if (l is EnumType && r is IntegerType)
+            {
+                CastTo(conditionalOperator.LHS, l, r);
+            }
+
+            if (r is EnumType && l is IntegerType)
             {
                 CastTo(conditionalOperator.RHS, r, l);
             }

@@ -67,193 +67,308 @@ internal partial class CodeGenerator
                     FieldsEnumerator().Concat(
                         new MemberDeclarationSyntax[]
                         {
-                            SyntaxFactory.IndexerDeclaration(
-                                    SyntaxFactory.RefType(type))
+                            CreateIndexer("nuint"),
+                            CreateIndexer("nint"),
+                            ConversionOperatorDeclarationSyntax(),
+                            OperatorDeclarationSyntax()
+                        })));
+
+        IndexerDeclarationSyntax CreateIndexer(string indexType) =>
+            SyntaxFactory.IndexerDeclaration(
+                    SyntaxFactory.RefType(type))
+                .WithModifiers(
+                    SyntaxFactory.TokenList(
+                        SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+                .WithParameterList(
+                    SyntaxFactory.BracketedParameterList(
+                        SyntaxFactory.SingletonSeparatedList(
+                            SyntaxFactory.Parameter(
+                                    SyntaxFactory.Identifier("index"))
+                                .WithType(
+                                    SyntaxFactory.IdentifierName(indexType)))))
+                .WithAccessorList(
+                    SyntaxFactory.AccessorList(
+                        SyntaxFactory.SingletonList(
+                            AddBodyToAccessorDeclaration(
+                                SyntaxFactory.AccessorDeclaration(
+                                        SyntaxKind.GetAccessorDeclaration)
+                                    .WithAttributeLists(inlineAttributes),
+                            GetRefToIndexBlock(fixedBufferName, type, "index")))));
+
+        ConversionOperatorDeclarationSyntax ConversionOperatorDeclarationSyntax() =>
+            AddBodyToMethodDeclaration(SyntaxFactory.ConversionOperatorDeclaration(
+                    SyntaxFactory.Token(SyntaxKind.ImplicitKeyword),
+                    SyntaxFactory.PointerType(type))
+                .WithAttributeLists(inlineAttributes)
+                .WithModifiers(
+                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+                .WithParameterList(
+                    SyntaxFactory.ParameterList(
+                        SyntaxFactory.SingletonSeparatedList(
+                            SyntaxFactory.Parameter(
+                                    SyntaxFactory.Identifier("t"))
                                 .WithModifiers(
                                     SyntaxFactory.TokenList(
-                                        SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                                .WithParameterList(
-                                    SyntaxFactory.BracketedParameterList(
-                                        SyntaxFactory.SingletonSeparatedList(
-                                            SyntaxFactory.Parameter(
-                                                    SyntaxFactory.Identifier("index"))
-                                                .WithType(
-                                                    SyntaxFactory.IdentifierName("nuint")))))
-                                .WithAccessorList(
-                                    SyntaxFactory.AccessorList(
-                                        SyntaxFactory.SingletonList(
-                                            SyntaxFactory.AccessorDeclaration(
-                                                    SyntaxKind.GetAccessorDeclaration)
-                                                .WithAttributeLists(
-                                                    inlineAttributes)
-                                                .WithExpressionBody(
-                                                    SyntaxFactory.ArrowExpressionClause(
-                                                        SyntaxFactory.RefExpression(
-                                                            SyntaxFactory.PrefixUnaryExpression(
-                                                                SyntaxKind.PointerIndirectionExpression,
-                                                                SyntaxFactory.ParenthesizedExpression(
-                                                                    SyntaxFactory.BinaryExpression(
-                                                                        SyntaxKind.AddExpression,
-                                                                        SyntaxFactory.InvocationExpression(
-                                                                                SyntaxFactory.GenericName(
-                                                                                        SyntaxFactory.Identifier(
-                                                                                            "RefToPointer"))
-                                                                                    .WithTypeArgumentList(
-                                                                                        SyntaxFactory.TypeArgumentList(
-                                                                                            SyntaxFactory.SeparatedList(
-                                                                                                new[]
-                                                                                                {
-                                                                                                    SyntaxFactory
-                                                                                                        .IdentifierName(
-                                                                                                            fixedBufferName),
-                                                                                                    type
-                                                                                                }))))
-                                                                            .WithArgumentList(
-                                                                                SyntaxFactory.ArgumentList(
-                                                                                    SyntaxFactory
-                                                                                        .SingletonSeparatedList(
-                                                                                            SyntaxFactory.Argument(
-                                                                                                SyntaxFactory
-                                                                                                    .ThisExpression())))),
-                                                                        SyntaxFactory.IdentifierName("index")))))))
-                                                .WithSemicolonToken(
-                                                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))))),
-                            SyntaxFactory.IndexerDeclaration(
-                                    SyntaxFactory.RefType(type))
-                                .WithModifiers(
-                                    SyntaxFactory.TokenList(
-                                        SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                                .WithParameterList(
-                                    SyntaxFactory.BracketedParameterList(
-                                        SyntaxFactory.SingletonSeparatedList(
-                                            SyntaxFactory.Parameter(
-                                                    SyntaxFactory.Identifier("index"))
-                                                .WithType(
-                                                    SyntaxFactory.IdentifierName("nint")))))
-                                .WithAccessorList(
-                                    SyntaxFactory.AccessorList(
-                                        SyntaxFactory.SingletonList(
-                                            SyntaxFactory.AccessorDeclaration(
-                                                    SyntaxKind.GetAccessorDeclaration)
-                                                .WithAttributeLists(
-                                                    inlineAttributes)
-                                                .WithExpressionBody(
-                                                    SyntaxFactory.ArrowExpressionClause(
-                                                        SyntaxFactory.RefExpression(
-                                                            SyntaxFactory.PrefixUnaryExpression(
-                                                                SyntaxKind.PointerIndirectionExpression,
-                                                                SyntaxFactory.ParenthesizedExpression(
-                                                                    SyntaxFactory.BinaryExpression(
-                                                                        SyntaxKind.AddExpression,
-                                                                        SyntaxFactory.InvocationExpression(
-                                                                                SyntaxFactory.GenericName(
-                                                                                        SyntaxFactory.Identifier(
-                                                                                            "RefToPointer"))
-                                                                                    .WithTypeArgumentList(
-                                                                                        SyntaxFactory.TypeArgumentList(
-                                                                                            SyntaxFactory
-                                                                                                .SeparatedList(new[]
-                                                                                                {
-                                                                                                    SyntaxFactory
-                                                                                                        .IdentifierName(
-                                                                                                            fixedBufferName),
-                                                                                                    type
-                                                                                                }))))
-                                                                            .WithArgumentList(
-                                                                                SyntaxFactory.ArgumentList(
-                                                                                    SyntaxFactory
-                                                                                        .SingletonSeparatedList(
-                                                                                            SyntaxFactory.Argument(
-                                                                                                SyntaxFactory
-                                                                                                    .ThisExpression())))),
-                                                                        SyntaxFactory.IdentifierName("index")))))))
-                                                .WithSemicolonToken(
-                                                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))))),
-                            SyntaxFactory.ConversionOperatorDeclaration(
-                                    SyntaxFactory.Token(SyntaxKind.ImplicitKeyword),
-                                    SyntaxFactory.PointerType(type))
-                                .WithAttributeLists(inlineAttributes)
-                                .WithModifiers(
-                                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
-                                .WithParameterList(
-                                    SyntaxFactory.ParameterList(
-                                        SyntaxFactory.SingletonSeparatedList(
-                                            SyntaxFactory.Parameter(
-                                                    SyntaxFactory.Identifier("t"))
-                                                .WithModifiers(
-                                                    SyntaxFactory.TokenList(
-                                                        SyntaxFactory.Token(SyntaxKind.InKeyword)))
-                                                .WithType(
-                                                    SyntaxFactory.IdentifierName(fixedBufferName)))))
-                                .WithExpressionBody(
-                                    SyntaxFactory.ArrowExpressionClause(
-                                        SyntaxFactory.InvocationExpression(
-                                                SyntaxFactory.GenericName(
-                                                        SyntaxFactory.Identifier("RefToPointer"))
-                                                    .WithTypeArgumentList(
-                                                        SyntaxFactory.TypeArgumentList(
-                                                            SyntaxFactory.SeparatedList(
-                                                                new[]
-                                                                {
-                                                                    SyntaxFactory.IdentifierName(fixedBufferName),
-                                                                    type
-                                                                }))))
-                                            .WithArgumentList(
-                                                SyntaxFactory.ArgumentList(
-                                                    SyntaxFactory.SingletonSeparatedList(
-                                                        SyntaxFactory.Argument(
-                                                            SyntaxFactory.IdentifierName("t")))))))
-                                .WithSemicolonToken(
-                                    SyntaxFactory.Token(SyntaxKind.SemicolonToken)),
-                            SyntaxFactory.OperatorDeclaration(
-                                    SyntaxFactory.PointerType(type),
-                                    SyntaxFactory.Token(SyntaxKind.PlusToken))
-                                .WithAttributeLists(inlineAttributes)
-                                .WithModifiers(
-                                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
-                                .WithParameterList(
-                                    SyntaxFactory.ParameterList(
+                                        SyntaxFactory.Token(SyntaxKind.InKeyword)))
+                                .WithType(
+                                    SyntaxFactory.IdentifierName(fixedBufferName))))),
+                GetPointerToBlock(fixedBufferName, type, "t"));
+
+        OperatorDeclarationSyntax OperatorDeclarationSyntax() =>
+            AddBodyToMethodDeclaration(SyntaxFactory.OperatorDeclaration(
+                    SyntaxFactory.PointerType(type),
+                    SyntaxFactory.Token(SyntaxKind.PlusToken))
+                .WithAttributeLists(inlineAttributes)
+                .WithModifiers(
+                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+                .WithParameterList(
+                    SyntaxFactory.ParameterList(
+                        SyntaxFactory.SeparatedList(
+                            new[]
+                            {
+                                SyntaxFactory.Parameter(
+                                        SyntaxFactory.Identifier("t"))
+                                    .WithModifiers(
+                                        SyntaxFactory.TokenList(
+                                            SyntaxFactory.Token(SyntaxKind.InKeyword)))
+                                    .WithType(
+                                        SyntaxFactory.IdentifierName(fixedBufferName)),
+                                SyntaxFactory.Parameter(
+                                        SyntaxFactory.Identifier("index"))
+                                    .WithType(
+                                        SyntaxFactory.IdentifierName("nuint"))
+                            }))),
+                GetPointerToIndexBlock(fixedBufferName, type, "t", "index"));
+    }
+
+    private static T AddBodyToMethodDeclaration<T>(T method, BlockSyntax body) where T : BaseMethodDeclarationSyntax =>
+        body.Statements.Count == 1 && body.Statements[0] is ReturnStatementSyntax returnStatement
+            ? (T) method.WithExpressionBody(SyntaxFactory.ArrowExpressionClause(returnStatement.Expression!))
+                .WithSemicolonToken(
+                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+            : (T) method.WithBody(body);
+
+    private static AccessorDeclarationSyntax AddBodyToAccessorDeclaration(AccessorDeclarationSyntax method,
+        BlockSyntax body) =>
+        body.Statements.Count == 1 && body.Statements[0] is ReturnStatementSyntax returnStatement
+            ? method.WithExpressionBody(SyntaxFactory.ArrowExpressionClause(returnStatement.Expression!))
+                .WithSemicolonToken(
+                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+            : method.WithBody(body);
+
+    private ExpressionStatementSyntax GetILSizeofStatement(TypeSyntax type) =>
+        SyntaxFactory.ExpressionStatement(
+            type is PointerTypeSyntax
+                ? SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Sizeof"))
+                    .WithArgumentList(
+                        SyntaxFactory.ArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.Argument(
+                                    SyntaxFactory.ObjectCreationExpression(
+                                            SyntaxFactory.IdentifierName("TypeRef"))
+                                        .WithArgumentList(
+                                            SyntaxFactory.ArgumentList(
+                                                SyntaxFactory.SingletonSeparatedList(
+                                                    SyntaxFactory.Argument(
+                                                        SyntaxFactory.TypeOfExpression(type)))))))))
+                : SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.GenericName(
+                            SyntaxFactory.Identifier("Sizeof"))
+                        .WithTypeArgumentList(
+                            SyntaxFactory.TypeArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(type)))));
+
+    private ExpressionSyntax GetReturnPointerExpression(TypeSyntax type) =>
+        type is PointerTypeSyntax
+            ? SyntaxFactory.CastExpression(
+                SyntaxFactory.PointerType(type),
+                SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("IL"),
+                        SyntaxFactory.IdentifierName("ReturnPointer"))))
+            : SyntaxFactory.InvocationExpression(
+                    SyntaxFactory.MemberAccessExpression(
+                        SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.IdentifierName("IL"),
+                        SyntaxFactory.GenericName(
+                                SyntaxFactory.Identifier("ReturnPointer"))
+                            .WithTypeArgumentList(
+                                SyntaxFactory.TypeArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(type)))));
+
+    private BlockSyntax GetPointerToIndexBlock(string fixedBufferName, TypeSyntax type, string baseName,
+        string indexName)
+    {
+        if (Config.ForceUseInlineIL || type is PointerTypeSyntax)
+        {
+            AddUsing("InlineIL");
+            AddUsing("static InlineIL.IL.Emit");
+
+            return SyntaxFactory.Block(
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Ldarg_0"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Conv_U"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Ldarg_1"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Conv_I"))),
+                GetILSizeofStatement(type),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Conv_I"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Mul"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Add"))),
+                SyntaxFactory.ReturnStatement(GetReturnPointerExpression(type)));
+        }
+
+        return SyntaxFactory.Block(
+            SyntaxFactory.ReturnStatement(
+                SyntaxFactory.BinaryExpression(
+                    SyntaxKind.AddExpression,
+                    SyntaxFactory.InvocationExpression(
+                            SyntaxFactory.GenericName(
+                                    SyntaxFactory.Identifier(
+                                        "RefToPointer"))
+                                .WithTypeArgumentList(
+                                    SyntaxFactory.TypeArgumentList(
                                         SyntaxFactory.SeparatedList(
                                             new[]
                                             {
-                                                SyntaxFactory.Parameter(
-                                                        SyntaxFactory.Identifier("t"))
-                                                    .WithModifiers(
-                                                        SyntaxFactory.TokenList(
-                                                            SyntaxFactory.Token(SyntaxKind.InKeyword)))
-                                                    .WithType(
-                                                        SyntaxFactory.IdentifierName(fixedBufferName)),
-                                                SyntaxFactory.Parameter(
-                                                        SyntaxFactory.Identifier("index"))
-                                                    .WithType(
-                                                        SyntaxFactory.IdentifierName("nuint"))
-                                            })))
-                                .WithExpressionBody(
-                                    SyntaxFactory.ArrowExpressionClause(
-                                        SyntaxFactory.BinaryExpression(
-                                            SyntaxKind.AddExpression,
-                                            SyntaxFactory.InvocationExpression(
-                                                    SyntaxFactory.GenericName(
-                                                            SyntaxFactory.Identifier("RefToPointer"))
-                                                        .WithTypeArgumentList(
-                                                            SyntaxFactory.TypeArgumentList(
-                                                                SyntaxFactory.SeparatedList(
-                                                                    new[]
-                                                                    {
-                                                                        SyntaxFactory.IdentifierName(fixedBufferName),
-                                                                        type
-                                                                    }))))
-                                                .WithArgumentList(
-                                                    SyntaxFactory.ArgumentList(
-                                                        SyntaxFactory.SingletonSeparatedList(
-                                                            SyntaxFactory.Argument(
-                                                                SyntaxFactory.IdentifierName("t"))))),
-                                            SyntaxFactory.IdentifierName("index"))))
-                                .WithSemicolonToken(
-                                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-                        })));
+                                                SyntaxFactory
+                                                    .IdentifierName(
+                                                        fixedBufferName),
+                                                type
+                                            }))))
+                        .WithArgumentList(
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory
+                                    .SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.IdentifierName(baseName))))),
+                    SyntaxFactory.IdentifierName(indexName))));
+    }
+
+    private BlockSyntax GetPointerToBlock(string fixedBufferName, TypeSyntax type, string baseName)
+    {
+        if (Config.ForceUseInlineIL || type is PointerTypeSyntax)
+        {
+            AddUsing("InlineIL");
+            AddUsing("static InlineIL.IL.Emit");
+
+            return SyntaxFactory.Block(
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Ldarg_0"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Conv_U"))),
+                SyntaxFactory.ReturnStatement(GetReturnPointerExpression(type)));
+        }
+
+        return SyntaxFactory.Block(
+            SyntaxFactory.ReturnStatement(
+                SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.GenericName(
+                                SyntaxFactory.Identifier(
+                                    "RefToPointer"))
+                            .WithTypeArgumentList(
+                                SyntaxFactory.TypeArgumentList(
+                                    SyntaxFactory.SeparatedList(
+                                        new[]
+                                        {
+                                            SyntaxFactory
+                                                .IdentifierName(
+                                                    fixedBufferName),
+                                            type
+                                        }))))
+                    .WithArgumentList(
+                        SyntaxFactory.ArgumentList(
+                            SyntaxFactory
+                                .SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.IdentifierName(baseName)))))));
+    }
+
+    private BlockSyntax GetRefToIndexBlock(string fixedBufferName, TypeSyntax type, string indexName)
+    {
+        if (Config.ForceUseInlineIL || type is PointerTypeSyntax)
+        {
+            AddUsing("InlineIL");
+            AddUsing("static InlineIL.IL.Emit");
+
+            return SyntaxFactory.Block(
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Ldarg_0"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Conv_U"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Ldarg_1"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Conv_I"))),
+                GetILSizeofStatement(type),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Conv_I"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Mul"))),
+                SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.InvocationExpression(
+                        SyntaxFactory.IdentifierName("Add"))),
+                SyntaxFactory.ReturnStatement(
+                    SyntaxFactory.RefExpression(
+                        SyntaxFactory.PrefixUnaryExpression(
+                            SyntaxKind.PointerIndirectionExpression,
+                            GetReturnPointerExpression(type)))));
+        }
+
+        return SyntaxFactory.Block(
+            SyntaxFactory.ReturnStatement(
+                SyntaxFactory.RefExpression(
+                    SyntaxFactory.PrefixUnaryExpression(
+                        SyntaxKind.PointerIndirectionExpression,
+                        SyntaxFactory.ParenthesizedExpression(
+                            SyntaxFactory.BinaryExpression(
+                                SyntaxKind.AddExpression,
+                                SyntaxFactory.InvocationExpression(
+                                        SyntaxFactory.GenericName(
+                                                SyntaxFactory.Identifier(
+                                                    "RefToPointer"))
+                                            .WithTypeArgumentList(
+                                                SyntaxFactory.TypeArgumentList(
+                                                    SyntaxFactory.SeparatedList(
+                                                        new[]
+                                                        {
+                                                            SyntaxFactory
+                                                                .IdentifierName(
+                                                                    fixedBufferName),
+                                                            type
+                                                        }))))
+                                    .WithArgumentList(
+                                        SyntaxFactory.ArgumentList(
+                                            SyntaxFactory
+                                                .SingletonSeparatedList(
+                                                    SyntaxFactory.Argument(
+                                                        SyntaxFactory
+                                                            .ThisExpression())))),
+                                SyntaxFactory.IdentifierName(indexName)))))));
     }
 
     private TypeSyntax GetCSharpTypeForPointeeType(Cursor cursor, Type pointeeType)
@@ -266,6 +381,13 @@ internal partial class CodeGenerator
         if (pointeeType is FunctionType)
         {
             return GetType("IntPtr");
+        }
+
+        if (pointeeType is TypedefType typedefType &&
+            typedefType.Decl.UnderlyingType is FunctionProtoType functionProtoType &&
+            UseFunctionPointerForType(pointeeType.AsString))
+        {
+            return GetFunctionPointerType(cursor, functionProtoType);
         }
 
         var cSharpType = GetCSharpType(cursor, pointeeType, out _, innerPointer: true);

@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
@@ -50,6 +51,29 @@ internal class ProjectBuilder
 
             return builder;
         }
+    }
+
+    public bool TryGetBuilder(string name, [MaybeNullWhen(false)] out FileBuilder builder)
+    {
+        lock (this)
+        {
+            return _builders.TryGetValue(name, out builder);
+        }
+    }
+
+    public IEnumerable<FileBuilder> GetBuilders() => _builders.Values;
+
+    public bool TryGetTypeDeclaration(string name,
+        [MaybeNullWhen(false)] out TypeDeclarationSyntax typeDeclaration)
+    {
+        if (!TryGetBuilder(name, out var builder))
+        {
+            typeDeclaration = null;
+            return false;
+        }
+
+        typeDeclaration = builder.Members.OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.ToString() == name);
+        return typeDeclaration != null;
     }
 
     public bool TryGetMethod(string name, [MaybeNullWhen(false)] out FileBuilder fileBuilder,
@@ -139,4 +163,18 @@ internal class ProjectBuilder
     }
 
     public bool HasMethod(string name) => _methodBuilders.ContainsKey(name);
+
+    public IEnumerable<string> GetMethods() => _methodBuilders.Keys;
+
+    public bool ModifyMethod(string name,
+        Func<FileBuilder, MethodDeclarationSyntax, MethodDeclarationSyntax?> modifier)
+    {
+        if (!TryGetMethod(name, out var builder, out var methodDeclarationSyntax))
+        {
+            return false;
+        }
+
+        builder.ReplaceMethod(name, modifier(builder, methodDeclarationSyntax));
+        return true;
+    }
 }

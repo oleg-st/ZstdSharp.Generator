@@ -10,6 +10,7 @@ using ZstdSharp.Generator.CodeGenerator;
 using ZstdSharp.Generator.CodeGenerator.Macros;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
 using ZstdSharp.Generator.CodeGenerator.TypeCaster;
+using ZstdSharp.Generator.Modify;
 
 // ReSharper disable StringLiteralTypo
 // ReSharper disable CommentTypo

@@ -382,11 +382,37 @@ internal partial class CodeGenerator
 
             if (kind == SyntaxKind.AddressOfExpression)
             {
-                var cSharpType = GetRemappedCSharpType(unaryOperator.SubExpr, unaryOperator.SubExpr.Type, out _);
+                var cSharpType = GetRemappedCSharpType(unaryOperator.SubExpr, unaryOperator.SubExpr.Type, out var arrayConvertedToPointer);
+
                 // dereference
                 if (IsStructToClass(cSharpType.ToString()))
                 {
                     return Visit<ExpressionSyntax>(unaryOperator.SubExpr);
+                }
+
+                // &array -> &array[0]
+                if (arrayConvertedToPointer || cSharpType is ArrayTypeSyntax)
+                {
+                    // exclude crafted fixed buffer because &array[0] is not fixed, &array is equivalent to &array[0] here
+                    var isCraftedFixedSizedBuffer = false;
+                    if (unaryOperator.SubExpr is MemberExpr)
+                    {
+                        var innerType = GetElementType(cSharpType, out _);
+                        isCraftedFixedSizedBuffer =
+                            innerType != null && !IsSupportedFixedSizedBufferType(innerType.ToString());
+                    }
+
+                    if (!isCraftedFixedSizedBuffer)
+                    {
+                        return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,
+                            SyntaxFactory.ElementAccessExpression(
+                                Visit<ExpressionSyntax>(unaryOperator.SubExpr)!,
+                                SyntaxFactory.BracketedArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(
+                                            SyntaxKind.NumericLiteralExpression,
+                                            SyntaxFactory.Literal(0)))))));
+                    }
                 }
             }
 
@@ -620,6 +646,9 @@ internal partial class CodeGenerator
         else if (valueString.EndsWith("i64", StringComparison.OrdinalIgnoreCase))
         {
             valueString = valueString[..^3] + "L";
+        } else if (valueString.EndsWith("llu", StringComparison.OrdinalIgnoreCase))
+        {
+            valueString = valueString[..^3] + "UL";
         }
 
         if (valueString.EndsWith("ul", StringComparison.OrdinalIgnoreCase))

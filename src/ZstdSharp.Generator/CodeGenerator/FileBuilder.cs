@@ -47,19 +47,32 @@ internal class FileBuilder
         }
     }
 
+    public void AddMethodWithName(MethodDeclarationSyntax methodDeclaration, string methodName)
+    {
+        lock (this)
+        {
+            MethodsMembers.Add(methodDeclaration);
+            AddMethod(methodDeclaration, methodName);
+        }
+    }
+
     public void AddMethodsMember(MemberDeclarationSyntax memberDeclaration)
     {
         lock (this)
         {
             MethodsMembers.Add(memberDeclaration);
 
-            if (memberDeclaration is MethodDeclarationSyntax methodDeclarationSyntax)
+            if (memberDeclaration is MethodDeclarationSyntax methodDeclaration)
             {
-                var methodName = methodDeclarationSyntax.Identifier.ToString();
-                _methodDeclarations.Add(methodName, methodDeclarationSyntax);
-                OnMethodAdded(methodName);
+                AddMethod(methodDeclaration, methodDeclaration.Identifier.ToString());
             }
         }
+    }
+
+    private void AddMethod(MethodDeclarationSyntax methodDeclaration, string methodName)
+    {
+        _methodDeclarations.Add(methodName, methodDeclaration);
+        OnMethodAdded(methodName);
     }
 
     public bool TryGetMethod(string name, [MaybeNullWhen(false)] out MethodDeclarationSyntax methodDeclarationSyntax)

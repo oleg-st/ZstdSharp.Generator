@@ -6,11 +6,12 @@ using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using ZstdSharp.Generator.CodeGenerator;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
+using System.Xml.Linq;
 
 // ReSharper disable StringLiteralTypo
 // ReSharper disable CommentTypo
 
-namespace ZstdSharp.Generator;
+namespace ZstdSharp.Generator.Modify;
 
 internal class ProjectModifier
 {
@@ -23,23 +24,18 @@ internal class ProjectModifier
         _reporter = reporter;
     }
 
-    // todo made for zstd 1.5.2, 1.5.3
     private void ModifyMethod(string name,
         Func<FileBuilder, MethodDeclarationSyntax, MethodDeclarationSyntax?> modifier)
     {
-        if (_projectBuilder.TryGetMethod(name, out var builder, out var methodDeclarationSyntax))
-        {
-            builder.ReplaceMethod(name, modifier(builder, methodDeclarationSyntax));
-        }
-        else
+        if (!_projectBuilder.ModifyMethod(name, modifier))
         {
             _reporter.Report(DiagnosticLevel.Error, $"No method {name}");
         }
     }
 
-    private static BlockSyntax ParseBody(string body) => (BlockSyntax) SyntaxFactory.ParseStatement($"{{{body}}}");
+    private static BlockSyntax ParseBody(string body) => (BlockSyntax)SyntaxFactory.ParseStatement($"{{{body}}}");
 
-    private static SyntaxList<TSyntax> WrapWithIfDefined<TSyntax>(SyntaxList<TSyntax> statements, string name)
+    internal static SyntaxList<TSyntax> WrapWithIfDefined<TSyntax>(SyntaxList<TSyntax> statements, string name)
         where TSyntax : SyntaxNode
     {
         var firstStatement = statements.First();
@@ -58,7 +54,7 @@ internal class ProjectModifier
                     true))));
     }
 
-    private static TSyntax WrapWithIfDefined<TSyntax>(TSyntax statement, string name) where TSyntax : SyntaxNode
+    internal static TSyntax WrapWithIfDefined<TSyntax>(TSyntax statement, string name) where TSyntax : SyntaxNode
     {
         return statement
             .WithLeadingTrivia(SyntaxFactory.Trivia(
@@ -222,7 +218,7 @@ internal class ProjectModifier
                                                 .WithRefOrOutKeyword(
                                                     SyntaxFactory.Token(SyntaxKind.OutKeyword))))));
 
-                        method = method.InsertNodesAfter(node, new[] {callSkipInit});
+                        method = method.InsertNodesAfter(node, new[] { callSkipInit });
                         break;
                     }
                 }
@@ -230,6 +226,14 @@ internal class ProjectModifier
         }
 
         return method;
+    }
+
+    private void GuardAsserts()
+    {
+        foreach (var methodName in _projectBuilder.GetMethods())
+        {
+            ModifyMethod(methodName, (builder, method) => new AssertsRewriter(builder).RewriteMethod(method));
+        }
     }
 
     public void ModifyProject()
@@ -381,6 +385,8 @@ internal class ProjectModifier
 
         ModifyMethod("ZSTD_decompressSequencesLong_body", (_, method) => AddSkipInit(method, "seqState"));
 
+        ModifyMethod("ZSTD_errorFrameSizeInfo", (_, method) => AddSkipInit(method, "frameSizeInfo"));
+
         ModifyMethod("ZSTD_encodeSequences_body",
             (_, method) => method
                 .WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Where(attributeList =>
@@ -398,7 +404,7 @@ internal class ProjectModifier
             {
                 headParameterName = "head";
             }
-            else if(method.ParameterList.Parameters.Any(p => p.Identifier.ToString() == "headGrouped"))
+            else if (method.ParameterList.Parameters.Any(p => p.Identifier.ToString() == "headGrouped"))
             {
                 headParameterName = "headGrouped";
             }
@@ -700,5 +706,28 @@ internal class ProjectModifier
                 return ZSTD_BtFindBestMatch_dedicatedDictSearch_5(ms, ip, iend, offsetPtr);
             return ZSTD_BtFindBestMatch_dedicatedDictSearch_6(ms, ip, iend, offsetPtr);")));
         }
+
+        // v1.5.4
+        // improve fast c loop functions
+        ModifyFastCLoop(FastCLoopMethod.Decompress4X1);
+        ModifyFastCLoop(FastCLoopMethod.Decompress4X2);
+        // Guard full assert blocks with DEBUG condition
+        GuardAsserts();
+
+        // improve decompression
+        new ImproveDecompressSequences(_projectBuilder, _reporter).Run();
+    }
+
+    private void ModifyFastCLoop(FastCLoopMethod fastCLoopMethod)
+    {
+        var methodName = fastCLoopMethod switch
+        {
+            FastCLoopMethod.Decompress4X1 => "HUF_decompress4X1_usingDTable_internal_fast_c_loop",
+            FastCLoopMethod.Decompress4X2 => "HUF_decompress4X2_usingDTable_internal_fast_c_loop",
+            _ => throw new ArgumentOutOfRangeException(nameof(fastCLoopMethod), fastCLoopMethod, null)
+        };
+
+        ModifyMethod(methodName,
+            (_, method) => new FastCLoopModifier(fastCLoopMethod, _reporter).RewriteMethod(method));
     }
 }

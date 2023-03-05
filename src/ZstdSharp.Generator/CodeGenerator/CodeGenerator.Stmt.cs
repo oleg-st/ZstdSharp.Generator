@@ -188,7 +188,7 @@ internal partial class CodeGenerator
                 if (body != null)
                 {
                     var statementSyntax = Visit<StatementSyntax>(body);
-                    if (!IsEmptyStatement(statementSyntax))
+                    if (!TreeHelper.IsEmptyStatement(statementSyntax))
                     {
                         statementList = statementList.Add(statementSyntax);
                     }
@@ -218,7 +218,7 @@ internal partial class CodeGenerator
                     fallThrough = true;
                 }
 
-                if (syntaxNode is EmptyStatementSyntax || (syntaxNode is StatementSyntax statementSyntax && IsEmptyStatement(statementSyntax)))
+                if (syntaxNode is EmptyStatementSyntax || (syntaxNode is StatementSyntax statementSyntax && TreeHelper.IsEmptyStatement(statementSyntax)))
                 {
                     continue;
                 }
@@ -272,7 +272,7 @@ internal partial class CodeGenerator
                 if (currentSectionSyntax.Labels.LastOrDefault() is DefaultSwitchLabelSyntax)
                 {
                     var statementSyntax = GetStatements(currentSectionSyntax.Statements)
-                        .LastOrDefault(statement => !IsEmptyStatement(statement));
+                        .LastOrDefault(statement => !TreeHelper.IsEmptyStatement(statement));
 
                     if (statementSyntax is not BreakStatementSyntax && statementSyntax is not ReturnStatementSyntax)
                     {
@@ -297,7 +297,7 @@ internal partial class CodeGenerator
 
         RegisterStatementConsumer(statementSyntax =>
         {
-            if (!IsEmptyStatement(statementSyntax))
+            if (!TreeHelper.IsEmptyStatement(statementSyntax))
             {
                 statements.Add(statementSyntax);
             }
@@ -306,7 +306,7 @@ internal partial class CodeGenerator
         foreach (var statement in compoundStmt.Body)
         {
             var statementSyntax = Visit<StatementSyntax>(statement);
-            if (!IsEmptyStatement(statementSyntax))
+            if (!TreeHelper.IsEmptyStatement(statementSyntax))
             {
                 statements.Add(statementSyntax);
             }
@@ -322,9 +322,6 @@ internal partial class CodeGenerator
 
         return SyntaxFactory.Block(statements);
     }
-
-    private bool IsEmptyStatement([NotNullWhen(false)] StatementSyntax? statementSyntax) 
-        => statementSyntax is null or EmptyStatementSyntax or BlockSyntax {Statements.Count: 0};
 
     private IEnumerable<StatementSyntax?> GetStatements(IEnumerable<StatementSyntax?> statements)
     {
@@ -354,19 +351,19 @@ internal partial class CodeGenerator
                 ? VisitStatementSyntax(ifStmt.Then)
                 : ifStmt.Else != null ? VisitStatementSyntax(ifStmt.Else) : null;
 
-            return !IsEmptyStatement(stmt) ? stmt : null;
+            return !TreeHelper.IsEmptyStatement(stmt) ? stmt : null;
         }
 
         // pure cond && empty then && empty else
         var thenStatement = VisitStatementSyntax(ifStmt.Then);
         var elseStatement = ifStmt.Else != null ? VisitStatementSyntax(ifStmt.Else) : null;
-        if (IsEmptyStatement(thenStatement) && IsEmptyStatement(elseStatement) && IsPureExpr(ifStmt.Cond))
+        if (TreeHelper.IsEmptyStatement(thenStatement) && TreeHelper.IsEmptyStatement(elseStatement) && IsPureExpr(ifStmt.Cond))
         {
             return null;
         }
 
         // if (X) {} else {...} -> if (!(X)) {...}
-        if (IsEmptyStatement(thenStatement) && !IsEmptyStatement(elseStatement))
+        if (TreeHelper.IsEmptyStatement(thenStatement) && !TreeHelper.IsEmptyStatement(elseStatement))
         {
             // negate condition
             return SyntaxFactory.IfStatement(NegateLogicalExpression(Visit<ExpressionSyntax>(ifStmt.Cond)!), elseStatement);
@@ -380,7 +377,7 @@ internal partial class CodeGenerator
 
         return SyntaxFactory.IfStatement(ifCond,
             thenStatement ?? SyntaxFactory.EmptyStatement(),
-            !IsEmptyStatement(elseStatement) ? SyntaxFactory.ElseClause(elseStatement) : null);
+            !TreeHelper.IsEmptyStatement(elseStatement) ? SyntaxFactory.ElseClause(elseStatement) : null);
     }
 
     private StatementSyntax? VisitStatementSyntax(Cursor cursor)

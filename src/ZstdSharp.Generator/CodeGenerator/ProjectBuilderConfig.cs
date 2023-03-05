@@ -23,16 +23,18 @@ internal class ProjectBuilderConfig
 
     public bool ConvertNestedArraysToMultidimensional { get; }
 
+    public bool ForceUseInlineIL { get; }
+
     public ProjectBuilderConfig(string namespaceName, string outputLocation,
         string unsafeOutputLocation, string sourceLocation,
         IReadOnlyDictionary<string, string>? remappedNames = null, IReadOnlySet<string>? excludedNames = null,
         IReadOnlySet<string>? traversalNames = null, IReadOnlySet<string>? inlineMethods = null,
         IReadOnlyDictionary<string, CallReplacer.CallReplacement>? callReplacements = null,
         IReadOnlySet<string>? structToClasses = null,
-        bool useFunctionPointers = true, 
+        bool useFunctionPointers = true,
         IReadOnlySet<string>? excludeFunctionPointers = null,
-
-    bool convertNestedArraysToMultidimensional = false)
+        bool convertNestedArraysToMultidimensional = false,
+        bool forceUseInlineIL = false)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -49,5 +51,6 @@ internal class ProjectBuilderConfig
         UseFunctionPointers = useFunctionPointers;
         ExcludeFunctionPointers = excludeFunctionPointers ?? ImmutableHashSet<string>.Empty;
         ConvertNestedArraysToMultidimensional = convertNestedArraysToMultidimensional;
+        ForceUseInlineIL = forceUseInlineIL;
     }
 }

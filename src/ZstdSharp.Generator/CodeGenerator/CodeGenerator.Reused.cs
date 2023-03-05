@@ -59,48 +59,31 @@ internal partial class CodeGenerator
                 SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
                     SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
 
-        var conversionOperatorDeclarationSyntax = SyntaxFactory.ConversionOperatorDeclaration(
-                SyntaxFactory.Token(SyntaxKind.ImplicitKeyword),
-                SyntaxFactory.PointerType(GetType(elementTypeName)))
-            .WithAttributeLists(GetInlineAttributes())
-            .WithModifiers(
-                SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                    SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
-            .WithParameterList(
-                SyntaxFactory.ParameterList(
-                    SyntaxFactory.SingletonSeparatedList(
-                        SyntaxFactory.Parameter(
-                                SyntaxFactory.Identifier("t"))
-                            .WithModifiers(
-                                SyntaxFactory.TokenList(
-                                    SyntaxFactory.Token(SyntaxKind.InKeyword)))
-                            .WithType(
-                                GetType(escapedName)))))
-            .WithExpressionBody(
-                SyntaxFactory.ArrowExpressionClause(
-                    SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.GenericName(
-                                    SyntaxFactory.Identifier("RefToPointer"))
-                                .WithTypeArgumentList(
-                                    SyntaxFactory.TypeArgumentList(
-                                        SyntaxFactory.SeparatedList(
-                                            new[]
-                                            {
-                                                GetType(escapedName),
-                                                GetType(elementTypeName)
-                                            }))))
-                        .WithArgumentList(
-                            SyntaxFactory.ArgumentList(
-                                SyntaxFactory.SingletonSeparatedList(
-                                    SyntaxFactory.Argument(
-                                        SyntaxFactory.IdentifierName("t")))))))
-            .WithSemicolonToken(
-                SyntaxFactory.Token(SyntaxKind.SemicolonToken));
+        var elementType = GetType(elementTypeName);
+        var conversionOperatorDeclarationSyntax = AddBodyToMethodDeclaration(SyntaxFactory
+                .ConversionOperatorDeclaration(
+                    SyntaxFactory.Token(SyntaxKind.ImplicitKeyword),
+                    SyntaxFactory.PointerType(elementType))
+                .WithAttributeLists(GetInlineAttributes())
+                .WithModifiers(
+                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+                .WithParameterList(
+                    SyntaxFactory.ParameterList(
+                        SyntaxFactory.SingletonSeparatedList(
+                            SyntaxFactory.Parameter(
+                                    SyntaxFactory.Identifier("t"))
+                                .WithModifiers(
+                                    SyntaxFactory.TokenList(
+                                        SyntaxFactory.Token(SyntaxKind.InKeyword)))
+                                .WithType(
+                                    GetType(escapedName))))),
+            GetPointerToBlock(escapedName, elementType, "t"));
 
         if (IsSupportedFixedSizedBufferType(elementTypeName))
         {
             var fieldDeclarationSyntax = SyntaxFactory.FieldDeclaration(
-                    SyntaxFactory.VariableDeclaration(GetType(elementTypeName))
+                    SyntaxFactory.VariableDeclaration(elementType)
                         .WithVariables(
                             SyntaxFactory.SingletonSeparatedList(
                                 SyntaxFactory.VariableDeclarator(
@@ -126,7 +109,7 @@ internal partial class CodeGenerator
             {
                 var fieldDeclarationSyntax = SyntaxFactory.FieldDeclaration(
                     SyntaxFactory.VariableDeclaration(
-                            GetType(elementTypeName))
+                            elementType)
                         .WithVariables(
                             SyntaxFactory.SingletonSeparatedList(
                                 SyntaxFactory.VariableDeclarator(
