@@ -29,7 +29,7 @@ internal class ImproveDecompressSequences
 
         var overlapCopyModifier = new PointerToRefMethodModifier(_reporter, parameters);
         var modifiedMethod = (overlapCopyModifier.Visit(method) as MethodDeclarationSyntax)!;
-        builder.AddMethodWithName(modifiedMethod, method + "_ref");
+        builder.AddMethodWithName(modifiedMethod, methodName + "_ref");
         return true;
     }
 
@@ -38,13 +38,13 @@ internal class ImproveDecompressSequences
         private readonly MethodDeclarationSyntax _method;
         private readonly VariableDeclaratorSyntax _variable;
         private readonly Dictionary<string, ArgToVariableInfo> _argToVariables = new();
-        private const string ReturnLabel = "returnSequenceLength";
-        private readonly string _returnVariableName = "???";
+        private const string ReturnLabel = "returnOneSeqSize";
+        private readonly string _returnVariableName = "";
 
-        private record ArgToVariableInfo(string Name, bool CopyToLocal = false, bool Dereference = false)
+        private record ArgToVariableInfo(string TargetName, TypeSyntax Type, bool Dereference = false)
         {
-            public readonly string Name = Name;
-            public readonly bool CopyToLocal = CopyToLocal;
+            public readonly string TargetName = TargetName;
+            public readonly TypeSyntax Type = Type;
             public readonly bool Dereference = Dereference;
         }
 
@@ -58,27 +58,24 @@ internal class ImproveDecompressSequences
             foreach (var (i, p) in _method.ParameterList.Parameters.Select((p, index) => (index, p)))
             {
                 var argument = invocationExpression.ArgumentList.Arguments[i];
+                var type = p.Type!;
                 switch (argument.Expression)
                 {
                     case IdentifierNameSyntax identifierName:
                         _argToVariables.Add(p.Identifier.ToString(),
-                            new ArgToVariableInfo(identifierName.ToString()));
+                            new ArgToVariableInfo(identifierName.ToString(), type));
                         break;
                     case PrefixUnaryExpressionSyntax prefixUnaryExpression when
                         prefixUnaryExpression.Kind() == SyntaxKind.AddressOfExpression &&
                         prefixUnaryExpression.Operand is IdentifierNameSyntax identifierName2:
                         _argToVariables.Add(p.Identifier.ToString(),
-                            new ArgToVariableInfo(identifierName2.ToString(), Dereference: true));
-
+                            new ArgToVariableInfo(identifierName2.ToString(), type, Dereference: true));
                         break;
                     default:
                         reporter.Report(DiagnosticLevel.Error, $"Unknown argument kind {argument}");
                         break;
                 }
             }
-
-            // add opI = op, because of op's mutation in body
-            _argToVariables["op"] = new ArgToVariableInfo("opI", true);
 
             // return sequenceLength;
             var lastStatement = method.Body?.Statements.LastOrDefault();
@@ -88,31 +85,73 @@ internal class ImproveDecompressSequences
             }
         }
 
+        public override SyntaxNode? VisitExpressionStatement(ExpressionStatementSyntax node)
+        {
+            if (node.Expression is AssignmentExpressionSyntax assignmentExpression &&
+                assignmentExpression.Kind() == SyntaxKind.SimpleAssignmentExpression && 
+                assignmentExpression.Left is IdentifierNameSyntax identifierName)
+            {
+                var name = identifierName.ToString();
+                if (_argToVariables.TryGetValue(name, out var argToVariable) && argToVariable.TargetName == name)
+                {
+                    var newName = identifierName + "Inner";
+                    _argToVariables[name] = new ArgToVariableInfo(newName, argToVariable.Type);
+
+                    return SyntaxFactory.LocalDeclarationStatement(
+                        SyntaxFactory.VariableDeclaration(argToVariable.Type,
+                            SyntaxFactory.SingletonSeparatedList(SyntaxFactory.VariableDeclarator(newName)
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(assignmentExpression.Right))))
+                    );
+                }
+            }
+
+            return base.VisitExpressionStatement(node);
+        }
+
+        public override SyntaxNode? VisitLocalDeclarationStatement(LocalDeclarationStatementSyntax node)
+        {
+            // nuint sequenceLength = ...;
+            if (node.Declaration is { Variables.Count: 1 } variableDeclaration)
+            {
+                var variable = variableDeclaration.Variables.First();
+                if (variable.Identifier.ToString() == _returnVariableName)
+                {
+                    _argToVariables[_returnVariableName] =
+                        new ArgToVariableInfo(_variable.Identifier.ToString(), variableDeclaration.Type);
+
+                    return SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.IdentifierName(_variable.Identifier),
+                        variable.Initializer!.Value
+                    ));
+                }
+            }
+
+            return base.VisitLocalDeclarationStatement(node);
+        }
+
         public override SyntaxNode? VisitReturnStatement(ReturnStatementSyntax node)
         {
-            // return sequenceLength;
+            // return sequenceLength; -> goto returnLabel;
             if (node.Expression is IdentifierNameSyntax identifierName && identifierName.ToString() == _returnVariableName)
             {
-                // last return sequenceLength; -> returnLabel: oneSeqSize = sequenceLength;
+                // last return sequenceLength; -> returnLabel: ;
                 if (node.Parent is BlockSyntax {Parent: MethodDeclarationSyntax} blockSyntax &&
                     blockSyntax.Statements.LastOrDefault() == node)
                 {
-                    return SyntaxFactory.LabeledStatement(ReturnLabel, SyntaxFactory.ExpressionStatement(
-                        SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
-                            SyntaxFactory.IdentifierName(_variable.Identifier),
-                            (Visit(node.Expression!) as ExpressionSyntax)!)));
+                    return SyntaxFactory.LabeledStatement(ReturnLabel, SyntaxFactory.EmptyStatement());
                 }
 
                 // goto returnLabel;
                 return SyntaxFactory.GotoStatement(SyntaxKind.GotoStatement, SyntaxFactory.IdentifierName(ReturnLabel));
             }
 
-            // sequenceLength = ...; goto returnLabel;
+            // oneSeqSize = ...; goto returnLabel;
             return FoldBlockHelper.CombineStatements(new StatementSyntax[]
             {
                 SyntaxFactory.ExpressionStatement(
                     SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
-                        SyntaxFactory.IdentifierName(_returnVariableName), (Visit(node.Expression!) as ExpressionSyntax)!)),
+                        SyntaxFactory.IdentifierName(_variable.Identifier), (Visit(node.Expression!) as ExpressionSyntax)!)),
                 SyntaxFactory.GotoStatement(SyntaxKind.GotoStatement, SyntaxFactory.IdentifierName(ReturnLabel)),
             });
         }
@@ -120,15 +159,15 @@ internal class ImproveDecompressSequences
         public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
         {
             // replace usage of parameter to argument
-            if (_argToVariables.TryGetValue(node.Identifier.ToString(), out var toName))
+            if (_argToVariables.TryGetValue(node.Identifier.ToString(), out var argToVariableInfo))
             {
-                if (toName.Dereference)
+                if (argToVariableInfo.Dereference)
                 {
                     return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,
-                        SyntaxFactory.IdentifierName(toName.Name));
+                        SyntaxFactory.IdentifierName(argToVariableInfo.TargetName));
                 }
 
-                return SyntaxFactory.IdentifierName(toName.Name);
+                return SyntaxFactory.IdentifierName(argToVariableInfo.TargetName);
             }
 
             return base.VisitIdentifierName(node);
@@ -143,39 +182,11 @@ internal class ImproveDecompressSequences
                 if (innerExpression is IdentifierNameSyntax identifierName &&
                     _argToVariables.TryGetValue(identifierName.Identifier.ToString(), out var toName) && toName.Dereference)
                 {
-                    return SyntaxFactory.IdentifierName(toName.Name);
+                    return SyntaxFactory.IdentifierName(toName.TargetName);
                 }
             }
 
             return base.VisitPrefixUnaryExpression(node);
-        }
-
-        public override SyntaxNode? VisitBlock(BlockSyntax node)
-        {
-            // add prologue
-            if (node.Parent is MethodDeclarationSyntax)
-            {
-                var block = (base.VisitBlock(node) as BlockSyntax)!;
-                var prologue = new List<StatementSyntax>();
-
-                // var opI = op;
-                foreach (var kvp in _argToVariables)
-                {
-                    if (kvp.Value.CopyToLocal)
-                    {
-                        prologue.Add(SyntaxFactory.LocalDeclarationStatement(
-                            SyntaxFactory.VariableDeclaration(SyntaxFactory.IdentifierName("var"))
-                                .WithVariables(SyntaxFactory.SingletonSeparatedList(SyntaxFactory
-                                    .VariableDeclarator(SyntaxFactory.Identifier(kvp.Value.Name))
-                                    .WithInitializer(SyntaxFactory.EqualsValueClause(
-                                        SyntaxFactory.IdentifierName(kvp.Key)))))));
-                    }
-                }
-
-                return block.WithStatements(new SyntaxList<StatementSyntax>(prologue.Concat(block.Statements)));
-            }
-
-            return base.VisitBlock(node);
         }
 
         public BlockSyntax Run()
@@ -354,6 +365,7 @@ internal class ImproveDecompressSequences
         private readonly IReporter _reporter;
         private readonly MethodDeclarationSyntax _method;
         private readonly ProjectBuilder _projectBuilder;
+        private HashSet<string> _keepVariableOnStack;
 
         public DecompressSequencesModifier(ProjectBuilder projectBuilder, IReporter reporter,
             MethodDeclarationSyntax method)
@@ -361,6 +373,7 @@ internal class ImproveDecompressSequences
             _projectBuilder = projectBuilder;
             _reporter = reporter;
             _method = method;
+            _keepVariableOnStack = new HashSet<string> {"nbSeq"};
         }
 
         public override SyntaxNode? VisitLocalDeclarationStatement(LocalDeclarationStatementSyntax node)
@@ -402,7 +415,7 @@ internal class ImproveDecompressSequences
                     return FoldBlockHelper.CombineStatements(new StatementSyntax[]
                     {
                         node.WithDeclaration(variableDeclaration.WithVariables(SyntaxFactory.SingletonSeparatedList(variable.WithInitializer(null)))),
-                        block,
+                        block
                     });
                 }
             }
@@ -422,6 +435,33 @@ internal class ImproveDecompressSequences
             return base.VisitInvocationExpression(node);
         }
 
+        public override SyntaxNode? VisitBlock(BlockSyntax node)
+        {
+            // add prologue
+            if (node.Parent is MethodDeclarationSyntax)
+            {
+                var block = (base.VisitBlock(node) as BlockSyntax)!;
+                var prologue = new List<StatementSyntax>();
+                foreach (var var in _keepVariableOnStack)
+                {
+                    // System.Threading.Thread.VolatileRead(ref nbSeq);
+                    prologue.Add(
+                        SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.IdentifierName("System.Threading.Thread.VolatileRead"),
+                                SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(SyntaxFactory.IdentifierName(var))
+                                        .WithRefOrOutKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword))))))
+                            .WithLeadingTrivia(
+                                SyntaxFactory.Comment($"// HACK, force {var} to stack (better register usage)"))
+                    );
+                }
+
+                return block.WithStatements(new SyntaxList<StatementSyntax>(prologue.Concat(block.Statements)));
+            }
+
+            return base.VisitBlock(node);
+        }
+
         public MethodDeclarationSyntax Run()
         {
             return (FoldBlockHelper.FoldBlocks(Visit(_method)) as MethodDeclarationSyntax)!;
@@ -438,6 +478,7 @@ internal class ImproveDecompressSequences
          *  - sequence: expand struct to local variables (better register usage)
          *  - add ref version of ZSTD_overlapCopy8, replace &ip -> ref ip, &op -> ref op (better register usage)
          * 2) Inline ZSTD_execSequence into ZSTD_decompressSequences_body
+         * 3) Keep nbSeq on stack (better register usage), release edi register
          */
         if (!AddRefVersionOfMethod(zstdOverlapCopy8, new HashSet<string> {"ip", "op"}))
         {
