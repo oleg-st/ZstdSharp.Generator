@@ -220,9 +220,11 @@ public class Generator
             "HUF_setNbBits", "HUF_setValue",
             // 1.5.3
             "ZSTD_copy16",
-            // 
+            // 1.5.4
             "BIT_endOfDStream", "FSE_decodeSymbol", "HUF_decodeSymbolX1", "ZSTD_decodeSequence",
             "XXH_readBE32", "XXH_readBE64",
+            // 1.5.5
+            "ZSTD_hash4PtrS", "ZSTD_hash5PtrS", "ZSTD_hash6PtrS", "ZSTD_hash7PtrS", "ZSTD_hash8PtrS",
         };
 
         // inside of nested arrays, don't work in Mono (Android)

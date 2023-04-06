@@ -395,6 +395,8 @@ internal class ProjectModifier
 
         // switch to ifs
         ModifyMethod("ZSTD_hashPtr", (_, method) => ConvertMethodSwitchToIfs(method));
+        // switch to ifs
+        ModifyMethod("ZSTD_hashPtrSalted", (_, method) => ConvertMethodSwitchToIfs(method));
 
         // arm/sse2/soft versions
         ModifyMethod("ZSTD_row_getMatchMask", (builder, method) =>

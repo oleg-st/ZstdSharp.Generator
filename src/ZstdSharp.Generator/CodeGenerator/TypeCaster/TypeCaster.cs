@@ -833,7 +833,8 @@ internal class TypeCaster
         {
             // int & nuint -> (uint)int & nuint -> nuint
             // long & nuint -> (ulong)long & nuint -> 
-            CastTo(lhs, l, new IntegerType(li.Size, false));
+            //CastTo(lhs, l, new IntegerType(li.Size, false));
+            CastTo(lhs, l, ri);
             return new IntegerType(IntegerType.MaxSize(li.Size, ri.Size), false);
         }
         // todo
@@ -841,7 +842,8 @@ internal class TypeCaster
         if (!li.IsSigned && ri.IsSigned && !ri.IsConstant)
         {
             // nuint & int -> nuint & (uint)int -> nuint
-            CastTo(rhs, r, new IntegerType(ri.Size, false));
+            CastTo(rhs, r, li);
+            //CastTo(rhs, r, new IntegerType(ri.Size, false));
             return new IntegerType(IntegerType.MaxSize(li.Size, ri.Size), false);
         }
 
