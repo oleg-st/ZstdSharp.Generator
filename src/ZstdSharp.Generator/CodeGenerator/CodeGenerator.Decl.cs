@@ -381,8 +381,37 @@ internal partial class CodeGenerator
         {
             if (varDecl.HasInit && IsConstExpr(varDecl.Init))
             {
+                // nuint -> uint
+                fieldDeclarationSyntax = ConvertConstFieldType(fieldDeclarationSyntax, "nuint", "uint", uint.MinValue,
+                    uint.MaxValue);
+                // nint -> int
+                fieldDeclarationSyntax = ConvertConstFieldType(fieldDeclarationSyntax, "nint", "int", int.MinValue,
+                    int.MaxValue);
                 fieldDeclarationSyntax =
                     fieldDeclarationSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.ConstKeyword));
+
+                FieldDeclarationSyntax ConvertConstFieldType(FieldDeclarationSyntax field, string sourceType,
+                    string destType, long minValue, long maxValue)
+                {
+                    if (field.Declaration.Type.ToString() == sourceType)
+                    {
+                        var evalResult = varDecl.Init.Handle.Evaluate;
+                        if (evalResult.Kind == CXEvalResultKind.CXEval_Int && evalResult.AsLongLong >= minValue &&
+                            evalResult.AsLongLong <= maxValue)
+                        {
+                            field =
+                                field.WithDeclaration(
+                                    field.Declaration.WithType(GetType(destType)));
+                        }
+                        else
+                        {
+                            _reporter.Report(DiagnosticLevel.Warning,
+                                $"Const {sourceType} are not supported by IL2CPP (Unity), value is out bounds");
+                        }
+                    }
+
+                    return field;
+                }
             }
             else
             {
