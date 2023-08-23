@@ -357,7 +357,13 @@ internal partial class CodeGenerator
         // pure cond && empty then && empty else
         var thenStatement = VisitStatementSyntax(ifStmt.Then);
         var elseStatement = ifStmt.Else != null ? VisitStatementSyntax(ifStmt.Else) : null;
-        if (TreeHelper.IsEmptyStatement(thenStatement) && TreeHelper.IsEmptyStatement(elseStatement) && IsPureExpr(ifStmt.Cond))
+        var ifCond = Visit<ExpressionSyntax>(ifStmt.Cond);
+        if (ifCond == null)
+        {
+            return null;
+        }
+
+        if (TreeHelper.IsEmptyStatement(thenStatement) && TreeHelper.IsEmptyStatement(elseStatement) && IsPureExpr(ifCond))
         {
             return null;
         }
@@ -366,13 +372,7 @@ internal partial class CodeGenerator
         if (TreeHelper.IsEmptyStatement(thenStatement) && !TreeHelper.IsEmptyStatement(elseStatement))
         {
             // negate condition
-            return SyntaxFactory.IfStatement(NegateLogicalExpression(Visit<ExpressionSyntax>(ifStmt.Cond)!), elseStatement);
-        }
-
-        var ifCond = Visit<ExpressionSyntax>(ifStmt.Cond);
-        if (ifCond == null)
-        {
-            return null;
+            return SyntaxFactory.IfStatement(NegateLogicalExpression(ifCond), elseStatement);
         }
 
         return SyntaxFactory.IfStatement(ifCond,

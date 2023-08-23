@@ -646,7 +646,7 @@ internal partial class CodeGenerator
                 {
                     if (fieldDecl.IsBitField)
                     {
-                        Report(DiagnosticLevel.Error, $"Bit fields for structs is not supported {name}");
+                        Report(DiagnosticLevel.Error, $"Bit fields for structs is not supported {name}.{fieldDecl.Name}");
                     }
 
                     var fieldDeclarationSyntax = Visit<FieldDeclarationSyntax>(fieldDecl);
@@ -876,11 +876,6 @@ internal partial class CodeGenerator
 
     private SyntaxNode? VisitFieldDecl(FieldDecl fieldDecl)
     {
-        if (fieldDecl.IsBitField)
-        {
-            return null;
-        }
-
         var accessSpecifier = GetAccessSpecifierKind(fieldDecl);
         var name = GetRemappedCursorName(fieldDecl);
         var escapedName = EscapeName(name);

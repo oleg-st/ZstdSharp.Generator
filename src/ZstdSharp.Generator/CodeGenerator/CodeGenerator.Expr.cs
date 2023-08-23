@@ -15,11 +15,6 @@ internal partial class CodeGenerator
 {
     private SyntaxNode? VisitExpr(Expr expr)
     {
-        if (IsVoidExpr(expr))
-        {
-            return null;
-        }
-
         _typeCaster.Visit(expr, _context);
 
         var node = expr switch
@@ -95,6 +90,11 @@ internal partial class CodeGenerator
                     return callReplacement.Apply(invocationExpressionSyntax);
                 }
             }
+        }
+
+        if (node is ExpressionSyntax expression && IsVoidExpr(expression))
+        {
+            return null;
         }
 
         return node;
@@ -302,13 +302,6 @@ internal partial class CodeGenerator
     {
         var type = cStyleCastExpr.Type;
         var cSharpType = GetRemappedCSharpType(cStyleCastExpr, type, out _);
-
-        // skip (void)const
-        // todo
-        if (cSharpType.ToString() == "void" && IsPureExpr(cStyleCastExpr.SubExpr))
-        {
-            return null;
-        }
 
         if (cStyleCastExpr.CastKind == CX_CastKind.CX_CK_NullToPointer)
         {
@@ -532,8 +525,12 @@ internal partial class CodeGenerator
     {
         if (binaryOperator.Opcode == CX_BinaryOperatorKind.CX_BO_Comma)
         {
-            var left = Visit<ExpressionSyntax>(binaryOperator.LHS)!;
-            AddStatementToConsumer(SyntaxFactory.ExpressionStatement(left));
+            var left = Visit<ExpressionSyntax>(binaryOperator.LHS);
+            if (left != null)
+            {
+                AddStatementToConsumer(SyntaxFactory.ExpressionStatement(left));
+            }
+
             return Visit<ExpressionSyntax>(binaryOperator.RHS)!;
         }
 

@@ -540,34 +540,35 @@ internal partial class CodeGenerator
         return false;
     }
 
-    private bool IsVoidExpr(Cursor cursor)
+    private bool IsVoidExpr(ExpressionSyntax expression)
     {
-        return cursor switch
+        return expression switch
         {
-            CStyleCastExpr {CastKind: CX_CastKind.CX_CK_ToVoid} cStyleCastExpr when IsPureExpr(cStyleCastExpr
-                    .SubExpr)
-                => true,
-            BinaryOperator binaryOperator => IsVoidExpr(binaryOperator.LHS) && IsPureExpr(binaryOperator.RHS),
-            UnaryOperator unaryOperator => IsVoidExpr(unaryOperator.SubExpr),
-            ParenExpr parenExpr => IsVoidExpr(parenExpr.SubExpr),
-            CastExpr castExpr => IsVoidExpr(castExpr.SubExpr),
+            CastExpressionSyntax castExpression when castExpression.Type.ToString() == "void" &&
+                                                     IsPureExpr(castExpression.Expression) => true,
+            BinaryExpressionSyntax binaryOperator => IsVoidExpr(binaryOperator.Left) && IsVoidExpr(binaryOperator.Right),
+            PrefixUnaryExpressionSyntax prefixUnaryExpressionSyntax => IsVoidExpr(prefixUnaryExpressionSyntax.Operand),
+            PostfixUnaryExpressionSyntax postfixUnaryExpressionSyntax => IsVoidExpr(postfixUnaryExpressionSyntax.Operand),
+            ParenthesizedExpressionSyntax parenthesizedExpression => IsVoidExpr(parenthesizedExpression.Expression),
+            CastExpressionSyntax castExpression2 => IsVoidExpr(castExpression2.Expression),
             _ => false
         };
     }
 
-    private static bool IsPureExpr(Expr expr)
+    private bool IsPureExpr(ExpressionSyntax expression)
     {
-        return expr switch
+        return expression switch
         {
-            BinaryOperator binaryOperator => IsPureExpr(binaryOperator.LHS) && IsPureExpr(binaryOperator.RHS),
-            UnaryOperator unaryOperator => IsPureExpr(unaryOperator.SubExpr),
-            ParenExpr parenExpr => IsPureExpr(parenExpr.SubExpr),
-            CastExpr castExpr => IsPureExpr(castExpr.SubExpr),
-            MemberExpr memberExpr => IsPureExpr(memberExpr.Base),
-            _ => expr is IntegerLiteral or DeclRefExpr or UnaryExprOrTypeTraitExpr
-            {
-                Kind: CX_UnaryExprOrTypeTrait.CX_UETT_SizeOf
-            }
+            BinaryExpressionSyntax binaryOperator => IsPureExpr(binaryOperator.Left) && IsPureExpr(binaryOperator.Right),
+            PrefixUnaryExpressionSyntax unaryOperator => IsPureExpr(unaryOperator.Operand),
+            PostfixUnaryExpressionSyntax postfixUnaryExpressionSyntax => IsPureExpr(postfixUnaryExpressionSyntax.Operand),
+            ParenthesizedExpressionSyntax parenExpr => IsPureExpr(parenExpr.Expression),
+            CastExpressionSyntax castExpr => IsPureExpr(castExpr.Expression),
+            MemberAccessExpressionSyntax memberAccess => IsPureExpr(memberAccess.Expression),
+            IdentifierNameSyntax => true,
+            SizeOfExpressionSyntax => true,
+            LiteralExpressionSyntax => true,
+            _ => false,
         };
     }
 

@@ -100,7 +100,7 @@ internal class ProjectBuilder
                 var compilationUnitSyntax = builder.Build();
 
                 var filename = Path.Combine(Config.UnsafeOutputLocation, $"{builder.Name}.cs");
-                await File.WriteAllTextAsync(filename, compilationUnitSyntax.NormalizeWhitespace().ToString());
+                await File.WriteAllTextAsync(filename, compilationUnitSyntax.NormalizeWhitespace().ToFullString());
             })));
     }
 

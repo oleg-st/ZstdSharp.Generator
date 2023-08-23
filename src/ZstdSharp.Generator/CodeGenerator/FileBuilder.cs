@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Diagnostics.CodeAnalysis;
+using System.Xml.Linq;
 
 namespace ZstdSharp.Generator.CodeGenerator;
 
@@ -133,6 +134,14 @@ internal class FileBuilder
         return usingDirective;
     }
 
+    private IEnumerable<UsingDirectiveSyntax> GetUsingDirectives()
+    {
+        foreach (var usingDirective in UsingDirectives.Select(GetUsingDirective))
+        {
+            yield return usingDirective;
+        }
+    }
+
     public CompilationUnitSyntax Build()
     {
         var namespaceDeclarationSyntax = SyntaxFactory.NamespaceDeclaration(
@@ -154,7 +163,7 @@ internal class FileBuilder
 
         return SyntaxFactory.CompilationUnit()
             .WithUsings(
-                SyntaxFactory.List(UsingDirectives.Select(GetUsingDirective))
+                SyntaxFactory.List(GetUsingDirectives())
             )
             .WithMembers(
                 SyntaxFactory.SingletonList<MemberDeclarationSyntax>(
