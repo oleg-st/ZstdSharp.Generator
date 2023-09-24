@@ -565,6 +565,7 @@ internal partial class CodeGenerator
             ParenthesizedExpressionSyntax parenExpr => IsPureExpr(parenExpr.Expression),
             CastExpressionSyntax castExpr => IsPureExpr(castExpr.Expression),
             MemberAccessExpressionSyntax memberAccess => IsPureExpr(memberAccess.Expression),
+            ElementAccessExpressionSyntax elementAccessExpression => IsPureExpr(elementAccessExpression.Expression),
             IdentifierNameSyntax => true,
             SizeOfExpressionSyntax => true,
             LiteralExpressionSyntax => true,

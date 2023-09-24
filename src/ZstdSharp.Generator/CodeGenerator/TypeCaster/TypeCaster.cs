@@ -279,10 +279,6 @@ internal class TypeCaster
 
         public bool IsConstant { get; private init; }
 
-        public bool IsRuntimeConstant { get; private init; }
-
-        public bool IsAnyConstant => IsConstant || IsRuntimeConstant;
-
         public bool HasValue => Value.HasValue;
 
         // between 4 and 8
@@ -352,11 +348,6 @@ internal class TypeCaster
         {
             return new IntegerType(Size, IsSigned) {IsConstant = true};
         }
-
-        public CustomType InheritWithRuntimeConstant()
-        {
-            return new IntegerType(Size, IsSigned) { IsRuntimeConstant = true };
-        }
     }
 
     private CustomType CastTo(Expr expr, CustomType source, CustomType target, bool strong = false)
@@ -397,7 +388,7 @@ internal class TypeCaster
                 return IntegerType.Create("int").InheritWithConstant();
             }
 
-            return IntegerType.Create("int").InheritWithRuntimeConstant();
+            return IntegerType.Create("int");
         }
 
         if (expr is UnaryExprOrTypeTraitExpr {Kind: CX_UnaryExprOrTypeTrait.CX_UETT_AlignOf or CX_UnaryExprOrTypeTrait.CX_UETT_PreferredAlignOf})
@@ -582,11 +573,7 @@ internal class TypeCaster
 
                 if (l is IntegerType li && r is IntegerType ri)
                 {
-                    var customType = MatchIntegers(li, ri, binaryOperator.LHS, binaryOperator.RHS, l, r);
-                    if (customType != null)
-                    {
-                        return customType.Inherit();
-                    }
+                    return MatchIntegers(li, ri, binaryOperator.LHS, binaryOperator.RHS, l, r);
                 }
 
                 // enum + integer (!int) -> integer, enum + int -> enum
@@ -601,51 +588,6 @@ internal class TypeCaster
                 {
                     CastTo(binaryOperator.RHS, r, l, true);
                     return l.Inherit();
-                }
-
-                if (IsCompatible(l, r, false))
-                {
-                    // bigger type
-                    if (l is IntegerType li1 && r is IntegerType ri1)
-                    {
-                        if (li1.IsRuntimeConstant && ri1.IsAnyConstant)
-                        {
-                            return li1;
-                        }
-
-                        if (ri1.IsRuntimeConstant && li1.IsAnyConstant)
-                        {
-                            return ri1;
-                        }
-
-                        if (ri1.IsConstant)
-                        {
-                            return li1.Inherit();
-                        }
-
-                        if (li1.IsConstant)
-                        {
-                            return ri1.Inherit();
-                        }
-
-                        return ri1.Size > li1.Size ? ri1.Inherit() : li1.Inherit();
-                    }
-
-                    return l.Inherit();
-                }
-
-                // cast negative
-                if (l is IntegerType li2 && r is IntegerType ri2)
-                {
-                    if (!li2.IsSigned && ri2.Value is < 0)
-                    {
-                        return CastTo(binaryOperator.RHS, r, l);
-                    }
-
-                    if (!ri2.IsSigned && li2.Value is < 0)
-                    {
-                        return CastTo(binaryOperator.LHS, l, r);
-                    }
                 }
             }
 
@@ -730,7 +672,7 @@ internal class TypeCaster
 
             // todo FIXME
             var lt = GetCustomType(conditionalOperator.LHS, conditionalOperator.LHS.Type);
-            var rt = GetCustomType(conditionalOperator.LHS, conditionalOperator.LHS.Type);
+            var rt = GetCustomType(conditionalOperator.RHS, conditionalOperator.RHS.Type);
 
             if (lt is FunctionPointerType)
             {
@@ -762,14 +704,13 @@ internal class TypeCaster
                 CastTo(conditionalOperator.RHS, r, l);
             }
 
+            if (l is IntegerType li && r is IntegerType ri)
+            {
+                return MatchIntegers(li, ri, conditionalOperator.LHS, conditionalOperator.RHS, l, r);
+            }
+
             if (IsCompatible(l, r, false))
             {
-                // bigger type
-                if (l is IntegerType li1 && r is IntegerType ri1)
-                {
-                    return ri1.Size > li1.Size ? ri1.Inherit() : li1.Inherit();
-                }
-
                 return l.Inherit();
             }
         }
@@ -809,45 +750,27 @@ internal class TypeCaster
         };
     }
 
-    private CustomType? MatchIntegers(IntegerType li, IntegerType ri, Expr lhs, Expr rhs, CustomType l, CustomType r)
+    private CustomType MatchIntegers(IntegerType li, IntegerType ri, Expr lhs, Expr rhs, CustomType l, CustomType r)
     {
-        // todo
-        /*bool IsIntegerTypesMatch(IntegerType li, IntegerType ri)
-        {
-            return !(
-                (li.Name == "nuint" && ri.IsSigned) ||
-                (ri.Name == "nuint" && li.IsSigned) ||
-                (li.Name == "ulong" && ri.IsSigned) ||
-                (ri.Name == "ulong" && li.IsSigned)
-            );
-        }*/
-
         if ((li.Size < 4 && ri.Size < 4) || (li.Name == "int" && ri.Size < 4) || (ri.Name == "int" && li.Size < 4))
         {
             return IntegerType.Create("int");
         }
 
-        // todo
-        //if (li.IsSigned && !ri.IsSigned && (!IsIntegerTypesMatch(li, ri) || !li.IsAnyConstant))
         if (li.IsSigned && !ri.IsSigned && !li.IsConstant)
         {
             // int & nuint -> (uint)int & nuint -> nuint
-            // long & nuint -> (ulong)long & nuint -> 
-            //CastTo(lhs, l, new IntegerType(li.Size, false));
-            CastTo(lhs, l, ri);
-            return new IntegerType(IntegerType.MaxSize(li.Size, ri.Size), false);
+            // long & nuint -> (nuint)long & nuint -> ulong
+            return CastTo(lhs, l, ri);
         }
-        // todo
-        //if (!li.IsSigned && ri.IsSigned && (!IsIntegerTypesMatch(li, ri) || !ri.IsAnyConstant))
+
         if (!li.IsSigned && ri.IsSigned && !ri.IsConstant)
         {
             // nuint & int -> nuint & (uint)int -> nuint
-            CastTo(rhs, r, li);
-            //CastTo(rhs, r, new IntegerType(ri.Size, false));
-            return new IntegerType(IntegerType.MaxSize(li.Size, ri.Size), false);
+            return CastTo(rhs, r, li);
         }
 
-        return null;
+        return new IntegerType(IntegerType.MaxSize(li.Size, ri.Size), li.IsSigned && ri.IsSigned);
     }
 
     private CustomType GetCustomType(Cursor cursor, Type type)
@@ -863,7 +786,6 @@ internal class TypeCaster
             }
 
             var integerType = IntegerType.Create(typeName);
-
             if (cursor is IntegerLiteral integerLiteral)
             {
                 return integerType.InheritWithValue(integerLiteral.Value);
