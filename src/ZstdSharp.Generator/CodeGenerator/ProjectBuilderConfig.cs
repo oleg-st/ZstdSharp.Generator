@@ -25,6 +25,7 @@ internal class ProjectBuilderConfig
 
     public bool ForceUseInlineIL { get; }
     public bool ArrayCreateOptimization { get; }
+    public bool UseDllExport { get; }
 
     public ProjectBuilderConfig(string namespaceName, string outputLocation,
         string unsafeOutputLocation, string sourceLocation,
@@ -36,7 +37,8 @@ internal class ProjectBuilderConfig
         IReadOnlySet<string>? excludeFunctionPointers = null,
         bool convertNestedArraysToMultidimensional = false,
         bool forceUseInlineIL = false,
-        bool arrayCreateOptimization = true)
+        bool arrayCreateOptimization = true,
+        bool useDllExport = true)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -55,5 +57,6 @@ internal class ProjectBuilderConfig
         ConvertNestedArraysToMultidimensional = convertNestedArraysToMultidimensional;
         ForceUseInlineIL = forceUseInlineIL;
         ArrayCreateOptimization = arrayCreateOptimization;
+        UseDllExport = useDllExport;
     }
 }

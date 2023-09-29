@@ -158,7 +158,21 @@ internal partial class CodeGenerator
             {
                 if (namedDecl is FunctionDecl functionDecl)
                 {
+                    if (Config.UseDllExport)
+                    {
+                        return functionDecl.Attrs.Any(x => x.Kind == CX_AttrKind.CX_AttrKind_DLLExport)
+                            ? SyntaxKind.PublicKeyword
+                            : SyntaxKind.PrivateKeyword;
+                    }
+
                     return functionDecl.IsStatic ? SyntaxKind.PrivateKeyword : SyntaxKind.PublicKeyword;
+                }
+
+                if (namedDecl is VarDecl varDecl)
+                {
+                    return varDecl.StorageClass == CX_StorageClass.CX_SC_Static
+                        ? SyntaxKind.PrivateKeyword
+                        : SyntaxKind.PublicKeyword;
                 }
 
                 // Top level declarations will have an invalid access specifier
