@@ -264,6 +264,8 @@ internal partial class CodeGenerator
             }
         }
 
+        ExpressionSyntax? arrayPointerInitializer = null;
+
         // initializer to stackalloc / GetArrayPointer
         if (initializer != null && arrayConvertedToPointer)
         {
@@ -316,6 +318,8 @@ internal partial class CodeGenerator
             }
             else
             {
+                arrayPointerInitializer = initializer;
+
                 initializer = SyntaxFactory.InvocationExpression(
                         SyntaxFactory.IdentifierName("GetArrayPointer"))
                     .WithArgumentList(
@@ -423,6 +427,73 @@ internal partial class CodeGenerator
         else
         {
             fieldDeclarationSyntax = fieldDeclarationSyntax.AddModifiers(SyntaxFactory.Token(SyntaxKind.StaticKeyword));
+        }
+
+        if (Config.ArrayCreateOptimization && arrayPointerInitializer != null &&
+            fieldDeclarationSyntax.Declaration.Type is PointerTypeSyntax pointerType &&
+            Net8SpanArrayCreation(pointerType.ElementType))
+        {
+            var directiveName = Net7SpanArrayCreation(pointerType.ElementType)
+                ? "NET7_0_OR_GREATER"
+                : "NET8_0_OR_GREATER";
+            AddUsing("System");
+            AddUsing("System.Runtime.InteropServices");
+
+            var spanPropertyName = $"Span_{escapedName}";
+            var spanPropertyDeclarationSyntax = SyntaxFactory.PropertyDeclaration(
+                    SyntaxFactory.GenericName(
+                            SyntaxFactory.Identifier("ReadOnlySpan"))
+                        .WithTypeArgumentList(
+                            SyntaxFactory.TypeArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(pointerType.ElementType))),
+                    SyntaxFactory.Identifier(spanPropertyName))
+                .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                    SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+                .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(arrayPointerInitializer))
+                .WithSemicolonToken(
+                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                .WithLeadingTrivia(SyntaxFactory.Trivia(
+                    SyntaxFactory.IfDirectiveTrivia(
+                        SyntaxFactory.IdentifierName(directiveName),
+                        true,
+                        false,
+                        false)));
+
+            var propertyDeclarationSyntax = SyntaxFactory
+                .PropertyDeclaration(cSharpType, SyntaxFactory.Identifier(escapedName))
+                .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(accessSpecifier),
+                    SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+                .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(
+                    SyntaxFactory.CastExpression(cSharpType,
+                        SyntaxFactory
+                            .InvocationExpression(
+                                SyntaxFactory.IdentifierName("System.Runtime.CompilerServices.Unsafe.AsPointer"))
+                            .WithArgumentList(
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                            SyntaxFactory.InvocationExpression(
+                                                    SyntaxFactory.IdentifierName(
+                                                        "MemoryMarshal.GetReference"))
+                                                .WithArgumentList(
+                                                    SyntaxFactory.ArgumentList(
+                                                        SyntaxFactory.SingletonSeparatedList(
+                                                            SyntaxFactory.Argument(
+                                                                SyntaxFactory.IdentifierName(spanPropertyName)
+                                                            ))))
+                                        ).WithRefOrOutKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword))))))
+                ))
+                .WithSemicolonToken(
+                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+                .WithTrailingTrivia(SyntaxFactory.Trivia(SyntaxFactory.ElseDirectiveTrivia(true, false)));
+
+            AddMethodsMember(spanPropertyDeclarationSyntax);
+            AddMethodsMember(propertyDeclarationSyntax);
+
+            fieldDeclarationSyntax =
+                fieldDeclarationSyntax.WithTrailingTrivia(SyntaxFactory.Trivia(
+                    SyntaxFactory.EndIfDirectiveTrivia(
+                        false)));
         }
 
         AddMethodsMember(fieldDeclarationSyntax);
@@ -646,7 +717,7 @@ internal partial class CodeGenerator
                 {
                     if (fieldDecl.IsBitField)
                     {
-                        Report(DiagnosticLevel.Error, $"Bit fields for structs is not supported {name}.{fieldDecl.Name}");
+                        Report(DiagnosticLevel.Warning, $"Bit fields for structs is not supported {name}.{fieldDecl.Name}");
                     }
 
                     var fieldDeclarationSyntax = Visit<FieldDeclarationSyntax>(fieldDecl);

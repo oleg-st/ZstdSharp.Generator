@@ -24,6 +24,7 @@ internal class ProjectBuilderConfig
     public bool ConvertNestedArraysToMultidimensional { get; }
 
     public bool ForceUseInlineIL { get; }
+    public bool ArrayCreateOptimization { get; }
 
     public ProjectBuilderConfig(string namespaceName, string outputLocation,
         string unsafeOutputLocation, string sourceLocation,
@@ -34,7 +35,8 @@ internal class ProjectBuilderConfig
         bool useFunctionPointers = true,
         IReadOnlySet<string>? excludeFunctionPointers = null,
         bool convertNestedArraysToMultidimensional = false,
-        bool forceUseInlineIL = false)
+        bool forceUseInlineIL = false,
+        bool arrayCreateOptimization = true)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -52,5 +54,6 @@ internal class ProjectBuilderConfig
         ExcludeFunctionPointers = excludeFunctionPointers ?? ImmutableHashSet<string>.Empty;
         ConvertNestedArraysToMultidimensional = convertNestedArraysToMultidimensional;
         ForceUseInlineIL = forceUseInlineIL;
+        ArrayCreateOptimization = arrayCreateOptimization;
     }
 }

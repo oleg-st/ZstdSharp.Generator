@@ -847,4 +847,12 @@ internal partial class CodeGenerator
 
     internal bool UseFunctionPointerForType(string name) 
         => Config.UseFunctionPointers && !Config.ExcludeFunctionPointers.Contains(name);
+
+    internal static bool Net7SpanArrayCreation(TypeSyntax typeSyntax) => typeSyntax.ToString() is "byte" or "sbyte" or "bool";
+
+    internal static bool Net8SpanArrayCreation(TypeSyntax typeSyntax) => Net7SpanArrayCreation(typeSyntax) ||
+                                                                      typeSyntax.ToString() is "short" or "ushort"
+                                                                          or "char" or "int"
+                                                                          or "uint" or "long" or "ulong" or "double"
+                                                                          or "float";
 }
