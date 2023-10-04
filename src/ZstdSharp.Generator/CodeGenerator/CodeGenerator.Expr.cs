@@ -292,7 +292,23 @@ internal partial class CodeGenerator
     private SyntaxNode VisitArraySubscriptExpr(ArraySubscriptExpr arraySubscriptExpr)
     {
         (Expr baseExpr, Expr idxExpr) = ExtractArraySubscriptExpr(arraySubscriptExpr);
-        return SyntaxFactory.ElementAccessExpression(Visit<ExpressionSyntax>(baseExpr)!,
+        var baseExpression = Visit<ExpressionSyntax>(baseExpr)!;
+        // s->f[1] -> s->f.e1
+        if (IsArtificialFixedBufferAccess(baseExpr, out var subExpression))
+        {
+            var evalResult = idxExpr.Handle.Evaluate;
+            if (evalResult.Kind == CXEvalResultKind.CXEval_Int)
+            {
+                var signedValue = evalResult.AsLongLong;
+                if (signedValue >= 0)
+                {
+                    return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, Visit<ExpressionSyntax>(subExpression)!,
+                                SyntaxFactory.IdentifierName($"e{signedValue}"));
+                }
+            }
+        }
+
+        return SyntaxFactory.ElementAccessExpression(baseExpression,
             SyntaxFactory.BracketedArgumentList(
                 SyntaxFactory.SingletonSeparatedList(
                     SyntaxFactory.Argument(Visit<ExpressionSyntax>(idxExpr)!))));
@@ -387,15 +403,15 @@ internal partial class CodeGenerator
                 if (arrayConvertedToPointer || cSharpType is ArrayTypeSyntax)
                 {
                     // exclude crafted fixed buffer because &array[0] is not fixed, &array is equivalent to &array[0] here
-                    var isCraftedFixedSizedBuffer = false;
+                    var isArtificialFixedSizedBuffer = false;
                     if (unaryOperator.SubExpr is MemberExpr)
                     {
                         var innerType = GetElementType(cSharpType, out _);
-                        isCraftedFixedSizedBuffer =
+                        isArtificialFixedSizedBuffer =
                             innerType != null && !IsSupportedFixedSizedBufferType(innerType.ToString());
                     }
 
-                    if (!isCraftedFixedSizedBuffer)
+                    if (!isArtificialFixedSizedBuffer)
                     {
                         return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,
                             SyntaxFactory.ElementAccessExpression(
@@ -590,7 +606,17 @@ internal partial class CodeGenerator
             return SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression);
         }
 
-        return Visit(implicitCastExpr.SubExpr);
+        var subExpression = Visit<ExpressionSyntax>(implicitCastExpr.SubExpr)!;
+        // ArtificialFixedBuffer access: s->f1 -> (&s->f1.e0)
+        if (IsArtificialFixedBufferAccess(implicitCastExpr, out _))
+        {
+            subExpression = SyntaxFactory.ParenthesizedExpression(
+                SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,
+                    SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, subExpression,
+                        SyntaxFactory.IdentifierName("e0"))));
+        }
+
+        return subExpression;
     }
 
     private static SyntaxNode VisitFloatingLiteral(FloatingLiteral floatingLiteral)

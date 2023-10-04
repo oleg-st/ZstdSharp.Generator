@@ -20,6 +20,7 @@ internal class FastCLoopModifier : CSharpSyntaxRewriter
 {
     private readonly IReporter _reporter;
     private readonly string[] _varNames;
+    private readonly string[] _artificialFixedBuffers;
 
     private readonly Dictionary<string, int> _variableValues = new();
 
@@ -41,6 +42,8 @@ internal class FastCLoopModifier : CSharpSyntaxRewriter
             FastCLoopMethod.Decompress4X2 => new[] {"bits", "ip", "op", "oend"},
             _ => throw new ArgumentOutOfRangeException(nameof(fastCLoopMethod), fastCLoopMethod, null),
         };
+
+        _artificialFixedBuffers = new[] {"args->ip", "args->op"};
     }
 
     public MethodDeclarationSyntax? RewriteMethod(MethodDeclarationSyntax method) =>
@@ -98,13 +101,22 @@ internal class FastCLoopModifier : CSharpSyntaxRewriter
         return true;
     }
 
-    private ExpressionSyntax CreateElementAccess(ExpressionSyntax expression, int index) =>
-        ConvertElementAccess(SyntaxFactory.ElementAccessExpression(
+    private ExpressionSyntax CreateElementAccess(ExpressionSyntax expression, int index)
+    {
+        var elementAccessExpressionSyntax = SyntaxFactory.ElementAccessExpression(
             expression, SyntaxFactory.BracketedArgumentList(
                 SyntaxFactory.SingletonSeparatedList(
                     SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(
                         SyntaxKind.NumericLiteralExpression,
-                        SyntaxFactory.Literal(index)))))));
+                        SyntaxFactory.Literal(index))))));
+        if (_artificialFixedBuffers.Contains(expression.ToString()))
+        {
+            return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, expression,
+                SyntaxFactory.IdentifierName($"e{index}"));
+        }
+
+        return ConvertElementAccess(elementAccessExpressionSyntax);
+    }
 
     private ExpressionSyntax ConvertElementAccess(ExpressionSyntax expression)
     {

@@ -35,9 +35,6 @@ internal partial class CodeGenerator
 
     private BaseTypeDeclarationSyntax CreateFixedBuffer(string name, TypeSyntax type, int size)
     {
-        AddUsing("System.Runtime.CompilerServices");
-        AddUsing("static ZstdSharp.UnsafeHelper");
-
         var fixedBufferName = GetArtificialFixedSizedBufferName(name);
 
         IEnumerable<MemberDeclarationSyntax> FieldsEnumerator()
@@ -64,83 +61,7 @@ internal partial class CodeGenerator
                     SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)))
             .WithMembers(
                 SyntaxFactory.List(
-                    FieldsEnumerator().Concat(
-                        new MemberDeclarationSyntax[]
-                        {
-                            CreateIndexer("nuint"),
-                            CreateIndexer("nint"),
-                            ConversionOperatorDeclarationSyntax(),
-                            OperatorDeclarationSyntax()
-                        })));
-
-        IndexerDeclarationSyntax CreateIndexer(string indexType) =>
-            SyntaxFactory.IndexerDeclaration(
-                    SyntaxFactory.RefType(type))
-                .WithModifiers(
-                    SyntaxFactory.TokenList(
-                        SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                .WithParameterList(
-                    SyntaxFactory.BracketedParameterList(
-                        SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Parameter(
-                                    SyntaxFactory.Identifier("index"))
-                                .WithType(
-                                    SyntaxFactory.IdentifierName(indexType)))))
-                .WithAccessorList(
-                    SyntaxFactory.AccessorList(
-                        SyntaxFactory.SingletonList(
-                            AddBodyToAccessorDeclaration(
-                                SyntaxFactory.AccessorDeclaration(
-                                        SyntaxKind.GetAccessorDeclaration)
-                                    .WithAttributeLists(inlineAttributes),
-                            GetRefToIndexBlock(fixedBufferName, type, "index")))));
-
-        ConversionOperatorDeclarationSyntax ConversionOperatorDeclarationSyntax() =>
-            AddBodyToMethodDeclaration(SyntaxFactory.ConversionOperatorDeclaration(
-                    SyntaxFactory.Token(SyntaxKind.ImplicitKeyword),
-                    SyntaxFactory.PointerType(type))
-                .WithAttributeLists(inlineAttributes)
-                .WithModifiers(
-                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
-                .WithParameterList(
-                    SyntaxFactory.ParameterList(
-                        SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Parameter(
-                                    SyntaxFactory.Identifier("t"))
-                                .WithModifiers(
-                                    SyntaxFactory.TokenList(
-                                        SyntaxFactory.Token(SyntaxKind.InKeyword)))
-                                .WithType(
-                                    SyntaxFactory.IdentifierName(fixedBufferName))))),
-                GetPointerToBlock(fixedBufferName, type, "t"));
-
-        OperatorDeclarationSyntax OperatorDeclarationSyntax() =>
-            AddBodyToMethodDeclaration(SyntaxFactory.OperatorDeclaration(
-                    SyntaxFactory.PointerType(type),
-                    SyntaxFactory.Token(SyntaxKind.PlusToken))
-                .WithAttributeLists(inlineAttributes)
-                .WithModifiers(
-                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
-                .WithParameterList(
-                    SyntaxFactory.ParameterList(
-                        SyntaxFactory.SeparatedList(
-                            new[]
-                            {
-                                SyntaxFactory.Parameter(
-                                        SyntaxFactory.Identifier("t"))
-                                    .WithModifiers(
-                                        SyntaxFactory.TokenList(
-                                            SyntaxFactory.Token(SyntaxKind.InKeyword)))
-                                    .WithType(
-                                        SyntaxFactory.IdentifierName(fixedBufferName)),
-                                SyntaxFactory.Parameter(
-                                        SyntaxFactory.Identifier("index"))
-                                    .WithType(
-                                        SyntaxFactory.IdentifierName("nuint"))
-                            }))),
-                GetPointerToIndexBlock(fixedBufferName, type, "t", "index"));
+                    FieldsEnumerator()));
     }
 
     private static T AddBodyToMethodDeclaration<T>(T method, BlockSyntax body) where T : BaseMethodDeclarationSyntax =>
@@ -200,177 +121,6 @@ internal partial class CodeGenerator
                                 SyntaxFactory.TypeArgumentList(
                                     SyntaxFactory.SingletonSeparatedList(type)))));
 
-    private BlockSyntax GetPointerToIndexBlock(string fixedBufferName, TypeSyntax type, string baseName,
-        string indexName)
-    {
-        if (Config.ForceUseInlineIL || type is PointerTypeSyntax)
-        {
-            AddUsing("InlineIL");
-            AddUsing("static InlineIL.IL.Emit");
-
-            return SyntaxFactory.Block(
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Ldarg_0"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Conv_U"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Ldarg_1"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Conv_I"))),
-                GetILSizeofStatement(type),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Conv_I"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Mul"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Add"))),
-                SyntaxFactory.ReturnStatement(GetReturnPointerExpression(type)));
-        }
-
-        return SyntaxFactory.Block(
-            SyntaxFactory.ReturnStatement(
-                SyntaxFactory.BinaryExpression(
-                    SyntaxKind.AddExpression,
-                    SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.GenericName(
-                                    SyntaxFactory.Identifier(
-                                        "RefToPointer"))
-                                .WithTypeArgumentList(
-                                    SyntaxFactory.TypeArgumentList(
-                                        SyntaxFactory.SeparatedList(
-                                            new[]
-                                            {
-                                                SyntaxFactory
-                                                    .IdentifierName(
-                                                        fixedBufferName),
-                                                type
-                                            }))))
-                        .WithArgumentList(
-                            SyntaxFactory.ArgumentList(
-                                SyntaxFactory
-                                    .SingletonSeparatedList(
-                                        SyntaxFactory.Argument(
-                                            SyntaxFactory.IdentifierName(baseName))))),
-                    SyntaxFactory.IdentifierName(indexName))));
-    }
-
-    private BlockSyntax GetPointerToBlock(string fixedBufferName, TypeSyntax type, string baseName)
-    {
-        if (Config.ForceUseInlineIL || type is PointerTypeSyntax)
-        {
-            AddUsing("InlineIL");
-            AddUsing("static InlineIL.IL.Emit");
-
-            return SyntaxFactory.Block(
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Ldarg_0"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Conv_U"))),
-                SyntaxFactory.ReturnStatement(GetReturnPointerExpression(type)));
-        }
-
-        return SyntaxFactory.Block(
-            SyntaxFactory.ReturnStatement(
-                SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.GenericName(
-                                SyntaxFactory.Identifier(
-                                    "RefToPointer"))
-                            .WithTypeArgumentList(
-                                SyntaxFactory.TypeArgumentList(
-                                    SyntaxFactory.SeparatedList(
-                                        new[]
-                                        {
-                                            SyntaxFactory
-                                                .IdentifierName(
-                                                    fixedBufferName),
-                                            type
-                                        }))))
-                    .WithArgumentList(
-                        SyntaxFactory.ArgumentList(
-                            SyntaxFactory
-                                .SingletonSeparatedList(
-                                    SyntaxFactory.Argument(
-                                        SyntaxFactory.IdentifierName(baseName)))))));
-    }
-
-    private BlockSyntax GetRefToIndexBlock(string fixedBufferName, TypeSyntax type, string indexName)
-    {
-        if (Config.ForceUseInlineIL || type is PointerTypeSyntax)
-        {
-            AddUsing("InlineIL");
-            AddUsing("static InlineIL.IL.Emit");
-
-            return SyntaxFactory.Block(
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Ldarg_0"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Conv_U"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Ldarg_1"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Conv_I"))),
-                GetILSizeofStatement(type),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Conv_I"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Mul"))),
-                SyntaxFactory.ExpressionStatement(
-                    SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Add"))),
-                SyntaxFactory.ReturnStatement(
-                    SyntaxFactory.RefExpression(
-                        SyntaxFactory.PrefixUnaryExpression(
-                            SyntaxKind.PointerIndirectionExpression,
-                            GetReturnPointerExpression(type)))));
-        }
-
-        return SyntaxFactory.Block(
-            SyntaxFactory.ReturnStatement(
-                SyntaxFactory.RefExpression(
-                    SyntaxFactory.PrefixUnaryExpression(
-                        SyntaxKind.PointerIndirectionExpression,
-                        SyntaxFactory.ParenthesizedExpression(
-                            SyntaxFactory.BinaryExpression(
-                                SyntaxKind.AddExpression,
-                                SyntaxFactory.InvocationExpression(
-                                        SyntaxFactory.GenericName(
-                                                SyntaxFactory.Identifier(
-                                                    "RefToPointer"))
-                                            .WithTypeArgumentList(
-                                                SyntaxFactory.TypeArgumentList(
-                                                    SyntaxFactory.SeparatedList(
-                                                        new[]
-                                                        {
-                                                            SyntaxFactory
-                                                                .IdentifierName(
-                                                                    fixedBufferName),
-                                                            type
-                                                        }))))
-                                    .WithArgumentList(
-                                        SyntaxFactory.ArgumentList(
-                                            SyntaxFactory
-                                                .SingletonSeparatedList(
-                                                    SyntaxFactory.Argument(
-                                                        SyntaxFactory
-                                                            .ThisExpression())))),
-                                SyntaxFactory.IdentifierName(indexName)))))));
-    }
-
     private TypeSyntax GetCSharpTypeForPointeeType(Cursor cursor, Type pointeeType)
     {
         if (pointeeType is AttributedType attributedType)
@@ -384,10 +134,11 @@ internal partial class CodeGenerator
         }
 
         if (pointeeType is TypedefType typedefType &&
-            typedefType.Decl.UnderlyingType is FunctionProtoType functionProtoType &&
-            UseFunctionPointerForType(pointeeType.AsString))
+            typedefType.Decl.UnderlyingType is FunctionProtoType functionProtoType)
         {
-            return GetFunctionPointerType(cursor, functionProtoType);
+            return UseFunctionPointerForType(pointeeType.AsString)
+                ? GetFunctionPointerType(cursor, functionProtoType)
+                : GetType(pointeeType.AsString);
         }
 
         var cSharpType = GetCSharpType(cursor, pointeeType, out _, innerPointer: true);
@@ -711,14 +462,109 @@ internal partial class CodeGenerator
                GetPrevContext<CallExpr>(out var callExpr) && callExpr.Spelling == "assert";
     }
 
+    private static SyntaxKind GetAccessSpecifier(SyntaxTokenList modifiers)
+        => modifiers
+            .Select(m => m.Kind())
+            .FirstOrDefault(m =>
+                m is SyntaxKind.PrivateKeyword or SyntaxKind.PublicKeyword or SyntaxKind.ProtectedKeyword
+                    or SyntaxKind.InternalKeyword);
+
+    private FieldDeclarationSyntax CreateArrayOptimization(FieldDeclarationSyntax fieldDeclarationSyntax)
+    {
+        var accessSpecifier = GetAccessSpecifier(fieldDeclarationSyntax.Modifiers);
+
+        if (fieldDeclarationSyntax.Declaration.Type is not PointerTypeSyntax pointerType ||
+            fieldDeclarationSyntax.Declaration.Variables.Count != 1)
+        {
+            _reporter.Report(DiagnosticLevel.Error, "Invalid use of CreateArrayOptimization");
+            return fieldDeclarationSyntax;
+        }
+
+        var initializer = fieldDeclarationSyntax.Declaration.Variables[0].Initializer?.Value;
+        if (!(initializer is InvocationExpressionSyntax
+              {
+                  Expression: IdentifierNameSyntax identifierName
+              } invocationExpression &&
+              identifierName.ToString() == "GetArrayPointer" &&
+              invocationExpression.ArgumentList.Arguments.Count == 1 &&
+              invocationExpression.ArgumentList.Arguments[0].Expression is ArrayCreationExpressionSyntax
+                  arrayPointerInitializer))
+        {
+            _reporter.Report(DiagnosticLevel.Error, "Invalid use of CreateArrayOptimization");
+            return fieldDeclarationSyntax;
+        }
+
+        var identifier = fieldDeclarationSyntax.Declaration.Variables[0].Identifier;
+        var directiveName = Net7SpanArrayCreation(pointerType.ElementType)
+                ? "NET7_0_OR_GREATER"
+                : "NET8_0_OR_GREATER";
+        AddUsing("System");
+        AddUsing("System.Runtime.InteropServices");
+
+        var spanPropertyName = $"Span_{identifier}";
+        var spanPropertyDeclarationSyntax = SyntaxFactory.PropertyDeclaration(
+                SyntaxFactory.GenericName(
+                        SyntaxFactory.Identifier("ReadOnlySpan"))
+                    .WithTypeArgumentList(
+                        SyntaxFactory.TypeArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(pointerType.ElementType))),
+                SyntaxFactory.Identifier(spanPropertyName))
+            .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
+                SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(arrayPointerInitializer))
+            .WithSemicolonToken(
+                SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+            .WithLeadingTrivia(SyntaxFactory.Trivia(
+                SyntaxFactory.IfDirectiveTrivia(
+                    SyntaxFactory.IdentifierName(directiveName),
+                    true,
+                    false,
+                    false)));
+
+        var propertyDeclarationSyntax = SyntaxFactory
+            .PropertyDeclaration(pointerType, identifier)
+            .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(accessSpecifier),
+                SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
+            .WithExpressionBody(SyntaxFactory.ArrowExpressionClause(
+                SyntaxFactory.CastExpression(pointerType,
+                    SyntaxFactory
+                        .InvocationExpression(
+                            SyntaxFactory.IdentifierName("System.Runtime.CompilerServices.Unsafe.AsPointer"))
+                        .WithArgumentList(
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.Argument(
+                                        SyntaxFactory.InvocationExpression(
+                                                SyntaxFactory.IdentifierName(
+                                                    "MemoryMarshal.GetReference"))
+                                            .WithArgumentList(
+                                                SyntaxFactory.ArgumentList(
+                                                    SyntaxFactory.SingletonSeparatedList(
+                                                        SyntaxFactory.Argument(
+                                                            SyntaxFactory.IdentifierName(spanPropertyName)
+                                                        ))))
+                                    ).WithRefOrOutKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword))))))
+            ))
+            .WithSemicolonToken(
+                SyntaxFactory.Token(SyntaxKind.SemicolonToken))
+            .WithTrailingTrivia(SyntaxFactory.Trivia(SyntaxFactory.ElseDirectiveTrivia(true, false)));
+
+        AddMethodsMember(spanPropertyDeclarationSyntax);
+        AddMethodsMember(propertyDeclarationSyntax);
+
+        return fieldDeclarationSyntax.WithTrailingTrivia(SyntaxFactory.Trivia(
+            SyntaxFactory.EndIfDirectiveTrivia(
+                false)));
+    }
+
     private FieldDeclarationSyntax CreateByteArrayField(string name, byte[] data)
     {
-        return SyntaxFactory.FieldDeclaration(
+        var fieldDeclarationSyntax = SyntaxFactory.FieldDeclaration(
                 SyntaxFactory.VariableDeclaration(
                         SyntaxFactory.PointerType(
-                                SyntaxFactory.PredefinedType(
-                                    SyntaxFactory.Token(SyntaxKind.ByteKeyword)))
-                            )
+                            SyntaxFactory.PredefinedType(
+                                SyntaxFactory.Token(SyntaxKind.ByteKeyword)))
+                    )
                     .WithVariables(
                         SyntaxFactory.SingletonSeparatedList(
                             SyntaxFactory.VariableDeclarator(
@@ -755,17 +601,22 @@ internal partial class CodeGenerator
                                                                                         .Literal(x)))))))))))))))
             .WithModifiers(
                 SyntaxFactory.TokenList(
-                    SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                    SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
                     SyntaxFactory.Token(SyntaxKind.StaticKeyword),
                     SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)));
+        if (Config.ArrayCreateOptimization)
+        {
+            fieldDeclarationSyntax = CreateArrayOptimization(fieldDeclarationSyntax);
+        }
+        return fieldDeclarationSyntax;
     }
 
     private ExpressionSyntax GetInnerExpression(ExpressionSyntax expression)
-    {
-        return expression is ParenthesizedExpressionSyntax parenthesizedExpression
-            ? GetInnerExpression(parenthesizedExpression.Expression)
-            : expression;
-    }
+        => expression switch
+        {
+            ParenthesizedExpressionSyntax parenthesizedExpression => GetInnerExpression(parenthesizedExpression.Expression),
+            _ => expression
+        };
 
     internal ExpressionSyntax NegateLogicalExpression(ExpressionSyntax expression)
     {
@@ -855,4 +706,43 @@ internal partial class CodeGenerator
                                                                           or "char" or "int"
                                                                           or "uint" or "long" or "ulong" or "double"
                                                                           or "float";
+
+    internal bool IsArtificialFixedBufferAccess(Expr expr, [MaybeNullWhen(false)] out Expr subExpression)
+    {
+        if (expr is ImplicitCastExpr implicitCastExpr)
+        {
+            if (implicitCastExpr.CastKind == CX_CastKind.CX_CK_ArrayToPointerDecay &&
+                GetExprAsWritten(implicitCastExpr.SubExpr, true) is MemberExpr memberExpr)
+            {
+                var type = memberExpr.Type;
+                var cSharpType = GetRemappedCSharpType(memberExpr, type, out _);
+                if (type.CanonicalType is ConstantArrayType)
+                {
+                    var elementTypeSyntax = GetElementType(cSharpType, out _)!;
+                    if (!IsSupportedFixedSizedBufferType(elementTypeSyntax.ToString()))
+                    {
+                        subExpression = implicitCastExpr.SubExpr;
+                        return true;
+                    }
+                }
+            }
+        }
+
+        subExpression = default;
+        return false;
+    }
+
+    internal bool IsSupportedFixedBufferType(Expr expr) =>
+        expr.Type is TypedefType typedefType &&
+        typedefType.Decl.UnderlyingType is ConstantArrayType constantArrayType &&
+        IsSupportedFixedSizedBufferType(GetCSharpType(expr, constantArrayType.ElementType, out _)
+            .ToString());
+
+    internal Expr GetInnerExpr(Expr expr)
+        => expr switch
+        {
+            ParenExpr parenExpr => GetInnerExpr(parenExpr.SubExpr),
+            ImplicitCastExpr implicitCastExpr when implicitCastExpr.CastKind == CX_CastKind.CX_CK_NoOp => GetInnerExpr(implicitCastExpr.SubExpr),
+            _ => expr
+        };
 }

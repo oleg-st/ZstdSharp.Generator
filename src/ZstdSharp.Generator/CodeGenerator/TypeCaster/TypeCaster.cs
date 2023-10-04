@@ -167,6 +167,20 @@ internal class TypeCaster
                 return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression, node);
             }
 
+            // function to IntPtr -> function
+            if (Target.Name == "IntPtr" && Target is FunctionPointerType && node is IdentifierNameSyntax)
+            {
+                return node;
+            }
+
+            // (T*)struct -> (T*)(&struct)
+            var innerExpr = codeGenerator.GetInnerExpr(expr);
+            if (innerExpr is ImplicitCastExpr {CastKind: CX_CastKind.CX_CK_ArrayToPointerDecay} implicitCastExpr &&
+                codeGenerator.IsSupportedFixedBufferType(implicitCastExpr.SubExpr))
+            {
+                node = SyntaxFactory.ParenthesizedExpression(SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression, node));
+            }
+
             // (type)node
             return codeGenerator.CreateCast(expr, codeGenerator.GetType(Target.Name), node);
         }

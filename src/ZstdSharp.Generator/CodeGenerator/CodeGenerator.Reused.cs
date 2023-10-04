@@ -50,36 +50,12 @@ internal partial class CodeGenerator
         var escapedName = EscapeName(name);
         // todo
         var elementTypeName = GetCSharpType(cursor, constantArrayType.ElementType, out _).ToString();
-
-        AddUsing("System.Runtime.CompilerServices");
-        AddUsing("static ZstdSharp.UnsafeHelper");
-
         var structDeclarationSyntax = SyntaxFactory.StructDeclaration(escapedName)
             .WithModifiers(
                 SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
                     SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
 
         var elementType = GetType(elementTypeName);
-        var conversionOperatorDeclarationSyntax = AddBodyToMethodDeclaration(SyntaxFactory
-                .ConversionOperatorDeclaration(
-                    SyntaxFactory.Token(SyntaxKind.ImplicitKeyword),
-                    SyntaxFactory.PointerType(elementType))
-                .WithAttributeLists(GetInlineAttributes())
-                .WithModifiers(
-                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                        SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
-                .WithParameterList(
-                    SyntaxFactory.ParameterList(
-                        SyntaxFactory.SingletonSeparatedList(
-                            SyntaxFactory.Parameter(
-                                    SyntaxFactory.Identifier("t"))
-                                .WithModifiers(
-                                    SyntaxFactory.TokenList(
-                                        SyntaxFactory.Token(SyntaxKind.InKeyword)))
-                                .WithType(
-                                    GetType(escapedName))))),
-            GetPointerToBlock(escapedName, elementType, "t"));
-
         if (IsSupportedFixedSizedBufferType(elementTypeName))
         {
             var fieldDeclarationSyntax = SyntaxFactory.FieldDeclaration(
@@ -119,7 +95,6 @@ internal partial class CodeGenerator
             }
         }
 
-        structDeclarationSyntax = structDeclarationSyntax.AddMembers(conversionOperatorDeclarationSyntax);
         AddMember(structDeclarationSyntax);
 
         StopFile();
