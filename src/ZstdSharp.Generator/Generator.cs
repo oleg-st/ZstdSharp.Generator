@@ -275,6 +275,8 @@ public class Generator
             { "DISPLAY", "DISPLAY(...) {}" },
             { "DISPLAYLEVEL", "DISPLAYLEVEL(...) {}" },
             { "DISPLAYUPDATE", "DISPLAYUPDATE(...) {}" },
+            // branchless in .NET 8
+            { "BOUNDED", "BOUNDED(min,val,max) ((val) <= (min) ? (min) : ((val) <= (max) ? (val) : (max)))"}
         };
 
         var macros = macroStorage.Macros;
