@@ -170,7 +170,7 @@ internal partial class CodeGenerator
 
                 if (namedDecl is VarDecl varDecl)
                 {
-                    return varDecl.StorageClass == CX_StorageClass.CX_SC_Static
+                    return varDecl.StorageClass == CX_StorageClass.CX_SC_Static || varDecl.IsLocalVarDecl
                         ? SyntaxKind.PrivateKeyword
                         : SyntaxKind.PublicKeyword;
                 }

@@ -381,7 +381,7 @@ internal partial class CodeGenerator
         var fieldDeclarationSyntax = SyntaxFactory.FieldDeclaration(variableDeclarationSyntax)
             .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(accessSpecifier)));
 
-        if (type.IsLocalConstQualified || arrayConvertedToPointer)
+        if (type.CanonicalType.IsLocalConstQualified || arrayConvertedToPointer)
         {
             if (varDecl.HasInit && IsConstExpr(varDecl.Init))
             {
