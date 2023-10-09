@@ -33,6 +33,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="ClangSharp" Version="15.0.2" />
+    <PackageReference Include="libclang.runtime.win-x64" Version="15.0.0" />
+    <PackageReference Include="libClangSharp.runtime.win-x64" Version="15.0.0" />
     <PackageReference Include="Microsoft.CodeAnalysis" Version="4.3.1" />
 
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.3.1" />
@@ -42,9 +45,5 @@
     <PackageReference Include="Microsoft.Build" Version="17.3.1" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.3.1" ExcludeAssets="runtime" />
 
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\ClangSharp\ClangSharp.csproj" />
   </ItemGroup>
 </Project>
