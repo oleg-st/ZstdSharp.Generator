@@ -164,7 +164,17 @@ internal class TypeCaster
             // function to function pointer -> &function
             if (codeGenerator.UseFunctionPointerForType(Target.Name) && Target is FunctionPointerType && node is IdentifierNameSyntax)
             {
-                return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression, node);
+                node = SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression, node);
+                if (codeGenerator.Config.HideFunctionPointers)
+                {
+                    var functionProtoType = codeGenerator.GetFunctionProtoType(expr);
+                    if (functionProtoType != null)
+                    {
+                        var functionPointerType = codeGenerator.GetFunctionPointerType(expr, functionProtoType);
+                        return codeGenerator.CreateCast(expr, functionPointerType, node);
+                    }
+                }
+                return node;
             }
 
             // function to IntPtr -> function

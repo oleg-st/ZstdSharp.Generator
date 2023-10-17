@@ -441,7 +441,18 @@ internal partial class CodeGenerator
 
     private SyntaxNode VisitCallExpr(CallExpr callExpr)
     {
-        return SyntaxFactory.InvocationExpression(Visit<ExpressionSyntax>(callExpr.Callee)!,
+        var calleeExpression = Visit<ExpressionSyntax>(callExpr.Callee)!;
+        // callee(X) -> ((delegate*)callee)(X)
+        if (Config.HideFunctionPointers)
+        {
+            var functionPointerType = GetCalleeFunctionProtoType(callExpr.Callee);
+            if (functionPointerType != null)
+            {
+                calleeExpression = SyntaxFactory.ParenthesizedExpression(CreateCast(callExpr, GetFunctionPointerType(callExpr.Callee, functionPointerType), calleeExpression));
+            }
+        }
+
+        return SyntaxFactory.InvocationExpression(calleeExpression,
             SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(callExpr.Args.Select(arg =>
                 SyntaxFactory.Argument(Visit<ExpressionSyntax>(arg)!)))));
     }

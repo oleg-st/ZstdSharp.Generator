@@ -21,6 +21,8 @@ internal class ProjectBuilderConfig
 
     public bool UseFunctionPointers { get; }
 
+    public bool HideFunctionPointers { get; }
+
     public bool ConvertNestedArraysToMultidimensional { get; }
 
     public bool ArrayCreateOptimization { get; }
@@ -34,6 +36,7 @@ internal class ProjectBuilderConfig
         IReadOnlySet<string>? structToClasses = null,
         bool useFunctionPointers = true,
         IReadOnlySet<string>? excludeFunctionPointers = null,
+        bool hideFunctionPointers = true,
         bool convertNestedArraysToMultidimensional = false,
         bool arrayCreateOptimization = true,
         bool useDllExport = true)
@@ -52,6 +55,7 @@ internal class ProjectBuilderConfig
         StructToClasses = structToClasses ?? ImmutableHashSet<string>.Empty;
         UseFunctionPointers = useFunctionPointers;
         ExcludeFunctionPointers = excludeFunctionPointers ?? ImmutableHashSet<string>.Empty;
+        HideFunctionPointers = hideFunctionPointers;
         ConvertNestedArraysToMultidimensional = convertNestedArraysToMultidimensional;
         ArrayCreateOptimization = arrayCreateOptimization;
         UseDllExport = useDllExport;

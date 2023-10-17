@@ -136,9 +136,14 @@ internal partial class CodeGenerator
         if (pointeeType is TypedefType typedefType &&
             typedefType.Decl.UnderlyingType is FunctionProtoType functionProtoType)
         {
-            return UseFunctionPointerForType(pointeeType.AsString)
-                ? GetFunctionPointerType(cursor, functionProtoType)
-                : GetType(pointeeType.AsString);
+            if (UseFunctionPointerForType(pointeeType.AsString))
+            {
+                return Config.HideFunctionPointers
+                    ? GetType("void*")
+                    : GetFunctionPointerType(cursor, functionProtoType);
+            }
+
+            return GetType(pointeeType.AsString);
         }
 
         var cSharpType = GetCSharpType(cursor, pointeeType, out _, innerPointer: true);
@@ -325,7 +330,16 @@ internal partial class CodeGenerator
                                 _reporter.Report(DiagnosticLevel.Warning, $"Nested array with function pointer {name}");
                             }
 
-                            cSharpType = useFunctionPointer ? GetFunctionPointerType(cursor, functionProtoType) : GetType(name);
+                            if (useFunctionPointer)
+                            {
+                                cSharpType = Config.HideFunctionPointers
+                                    ? GetType("void*")
+                                    : GetFunctionPointerType(cursor, functionProtoType);
+                            }
+                            else
+                            {
+                                cSharpType = GetType(name);
+                            }
                         }
                         else if ((innerPointer || useTypeDef) &&
                                  typedefType.Decl.UnderlyingType is ConstantArrayType constantArrayType)
@@ -353,6 +367,48 @@ internal partial class CodeGenerator
         }
 
         return cSharpType;
+    }
+
+    internal FunctionProtoType? GetFunctionProtoType(Expr expr)
+    {
+        var exprType = expr.Type;
+        if (exprType is PointerType pointerType)
+        {
+            var pointeeType = pointerType.PointeeType;
+            if (pointeeType is FunctionProtoType functionProtoType)
+            {
+                return functionProtoType;
+            }
+
+            if (pointeeType is TypedefType typedefType &&
+                typedefType.Decl.UnderlyingType is FunctionProtoType functionProtoType2)
+            {
+                return functionProtoType2;
+            }
+        }
+
+        return null;
+    }
+
+    internal FunctionProtoType? GetCalleeFunctionProtoType(Expr callee)
+    {
+        if (callee.Type is TypedefType typedefType2 && typedefType2.Decl.UnderlyingType is PointerType
+            {
+                PointeeType: FunctionProtoType functionProtoType
+            } && UseFunctionPointerForType(typedefType2.AsString))
+        {
+            return functionProtoType;
+        }
+
+        if (callee.Type is PointerType
+            {
+                PointeeType: TypedefType { Decl.UnderlyingType: FunctionProtoType functionProtoType2 } typedefType
+            } && UseFunctionPointerForType(typedefType.AsString))
+        {
+            return functionProtoType2;
+        }
+
+        return null;
     }
 
     internal TypeSyntax GetFunctionPointerType(Cursor typedefDecl, FunctionProtoType functionProtoType)
