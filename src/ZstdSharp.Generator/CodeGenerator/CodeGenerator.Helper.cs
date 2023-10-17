@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Text;
 using ClangSharp;
 using ClangSharp.Interop;
@@ -801,4 +802,89 @@ internal partial class CodeGenerator
             ImplicitCastExpr implicitCastExpr when implicitCastExpr.CastKind == CX_CastKind.CX_CK_NoOp => GetInnerExpr(implicitCastExpr.SubExpr),
             _ => expr
         };
+
+    internal IEnumerable<Cursor> ReverseContext()
+    {
+        var previousContext = _context.Last;
+        while (previousContext != null)
+        {
+            yield return previousContext.Value;
+            previousContext = previousContext.Previous;
+        }
+    }
+
+    internal IEnumerable<Cursor> GetContextBefore(Cursor cursor) => 
+        ReverseContext().SkipWhile(c => c != cursor).Skip(1);
+
+    private bool? IsVarDeclField(VarDecl varDecl)
+    {
+        var prevDecl = GetContextBefore(varDecl).FirstOrDefault(c => c is Decl);
+        if (prevDecl is TranslationUnitDecl or LinkageSpecDecl or RecordDecl)
+        {
+            if (!varDecl.HasInit)
+            {
+                return null;
+            }
+
+            return true;
+        }
+
+        var type = varDecl.Type;
+        if (varDecl.Kind != CX_DeclKind.CX_DeclKind_ParmVar && type is ArrayType &&
+            (varDecl.StorageClass == CX_StorageClass.CX_SC_Static || type.CanonicalType.IsLocalConstQualified))
+        {
+            return true;
+        }
+        return false;
+    }
+
+    private void AddInitConstructor(string typeName, TypeDeclarationSyntax typeDeclaration, RecordDecl decl, FileBuilder fileBuilder)
+    {
+        if (!_projectBuilder.AddInitConstructor(fileBuilder.Name))
+        {
+            return;
+        }
+
+        var constructorDeclarationSyntax = SyntaxFactory.ConstructorDeclaration(SyntaxFactory.Identifier(typeName))
+            .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
+            .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(GetConstructorArgs())))
+            .WithBody(SyntaxFactory.Block(GetConstructorStatements()));
+
+        var newTypeDeclarationSyntax = typeDeclaration.AddMembers(constructorDeclarationSyntax);
+        fileBuilder.ReplaceMember(typeDeclaration, newTypeDeclarationSyntax);
+
+        IEnumerable<ParameterSyntax> GetConstructorArgs()
+        {
+            foreach (var fieldDecl in decl.Fields)
+            {
+                var fieldName = GetRemappedCursorName(fieldDecl);
+                var type = fieldDecl.Type;
+                var cSharpType = GetRemappedCSharpType(fieldDecl, type, out _);
+                yield return SyntaxFactory.Parameter(
+                        SyntaxFactory.Identifier(fieldName))
+                    .WithType(cSharpType)
+                    .WithDefault(
+                        SyntaxFactory.EqualsValueClause(
+                            SyntaxFactory.LiteralExpression(
+                                SyntaxKind.DefaultLiteralExpression,
+                                SyntaxFactory.Token(SyntaxKind.DefaultKeyword))));
+            }
+        }
+
+        IEnumerable<StatementSyntax> GetConstructorStatements()
+        {
+            foreach (var fieldDecl in decl.Fields)
+            {
+                var fieldName = GetRemappedCursorName(fieldDecl);
+                yield return SyntaxFactory.ExpressionStatement(
+                    SyntaxFactory.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SyntaxFactory.MemberAccessExpression(
+                            SyntaxKind.SimpleMemberAccessExpression,
+                            SyntaxFactory.ThisExpression(),
+                            SyntaxFactory.IdentifierName(fieldName)),
+                        SyntaxFactory.IdentifierName(fieldName)));
+            }
+        }
+    }
 }

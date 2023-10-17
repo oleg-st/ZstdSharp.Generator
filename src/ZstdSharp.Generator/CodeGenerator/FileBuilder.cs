@@ -79,6 +79,16 @@ internal class FileBuilder
     public bool TryGetMethod(string name, [MaybeNullWhen(false)] out MethodDeclarationSyntax methodDeclarationSyntax)
         => _methodDeclarations.TryGetValue(name, out methodDeclarationSyntax);
 
+    public bool ReplaceMember(MemberDeclarationSyntax oldDeclarationSyntax, MemberDeclarationSyntax newMemberDeclarationSyntax)
+    {
+        var index = Members.IndexOf(oldDeclarationSyntax);
+        if (index < 0)
+            return false;
+        
+        Members[index] = newMemberDeclarationSyntax;
+        return true;
+    }
+
     public bool ReplaceMethod(string name, MethodDeclarationSyntax? newMethodDeclarationSyntax)
     {
         if (!TryGetMethod(name, out var methodDeclarationSyntax))

@@ -15,7 +15,7 @@ internal partial class CodeGenerator
 {
     private SyntaxNode? VisitExpr(Expr expr)
     {
-        _typeCaster.Visit(expr, _context);
+        _typeCaster.Visit(expr);
 
         var node = expr switch
         {
@@ -231,6 +231,28 @@ internal partial class CodeGenerator
             var type = innerInitListExpr.Type;
             var cSharpType = GetRemappedCSharpType(innerInitListExpr, type, out _);
 
+            if (Config.AvoidObjectInitializationInStatic)
+            {
+                var varDecl = ReverseContext().OfType<VarDecl>().FirstOrDefault();
+                if (varDecl != null && IsVarDeclField(varDecl) == true)
+                {
+                    var typeName = cSharpType.ToString();
+
+                    if (_projectBuilder.TryGetTypeDeclaration(typeName, out var typeDeclaration, out var fileBuilder))
+                    {
+                        AddInitConstructor(typeName, typeDeclaration, recordType.Decl, fileBuilder);
+                    }
+
+                    return SyntaxFactory.ObjectCreationExpression(
+                            SyntaxFactory.IdentifierName(typeName))
+                        .WithArgumentList(
+                            SyntaxFactory.ArgumentList(
+                                SyntaxFactory.SeparatedList(ArgsEnumerable())
+                                )
+                            );
+                }
+            }
+
             return SyntaxFactory.ObjectCreationExpression(cSharpType)
                 .WithInitializer(
                     SyntaxFactory.InitializerExpression(
@@ -239,25 +261,41 @@ internal partial class CodeGenerator
                     )
                 );
 
-            IEnumerable<ExpressionSyntax> InitEnumerable()
+            IEnumerable<(int, Stmt)> GetInits()
             {
-                var decl = recordType.Decl;
-
-                for (int i = 0; i < innerInitListExpr.Inits.Count; i++)
+                for (var i = 0; i < innerInitListExpr.Inits.Count; i++)
                 {
                     var init = innerInitListExpr.Inits[i];
-
                     if (init is ImplicitValueInitExpr)
                     {
                         continue;
                     }
 
-                    var fieldName = GetRemappedCursorName(decl.Fields[i]);
+                    yield return (i, init);
+                }
+            }
 
+            IEnumerable<ExpressionSyntax> InitEnumerable()
+            {
+                var decl = recordType.Decl;
+                foreach (var (i, init) in GetInits())
+                {
+                    var fieldName = GetRemappedCursorName(decl.Fields[i]);
                     yield return SyntaxFactory.AssignmentExpression(
                         SyntaxKind.SimpleAssignmentExpression,
                         SyntaxFactory.IdentifierName(fieldName),
                         Visit<ExpressionSyntax>(init)!);
+                }
+            }
+
+            IEnumerable<ArgumentSyntax> ArgsEnumerable()
+            {
+                var decl = recordType.Decl;
+                foreach (var (i, init) in GetInits())
+                {
+                    var fieldName = GetRemappedCursorName(decl.Fields[i]);
+                    yield return SyntaxFactory.Argument(Visit<ExpressionSyntax>(init)!)
+                        .WithNameColon(SyntaxFactory.NameColon(SyntaxFactory.IdentifierName(fieldName)));
                 }
             }
         }

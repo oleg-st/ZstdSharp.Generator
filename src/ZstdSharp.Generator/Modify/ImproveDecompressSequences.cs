@@ -218,7 +218,7 @@ internal class ImproveDecompressSequences
                 {
                     var typeName = p.Type;
                     if (typeName != null &&
-                        projectBuilder.TryGetTypeDeclaration(typeName.ToString(), out var typeDeclaration))
+                        projectBuilder.TryGetTypeDeclaration(typeName.ToString(), out var typeDeclaration, out _))
                     {
                         if (typeDeclaration is StructDeclarationSyntax structDeclaration)
                         {

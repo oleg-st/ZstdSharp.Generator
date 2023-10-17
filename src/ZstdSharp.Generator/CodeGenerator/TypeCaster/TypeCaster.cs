@@ -17,7 +17,6 @@ internal class TypeCaster
 {
     private readonly CodeGenerator _codeGenerator;
     private readonly CallReplacer _callReplacer;
-    private LinkedList<Cursor>? _context;
 
     public TypeCaster(CodeGenerator codeGenerator, CallReplacer callReplacer)
     {
@@ -908,14 +907,8 @@ internal class TypeCaster
     private bool IsPrevContextDecl<T>(out T? value)
         where T : Decl
     {
-        var previousContext = _context?.Last!.Previous;
-
-        while (previousContext!.Value is not Decl)
-        {
-            previousContext = previousContext.Previous;
-        }
-
-        if (previousContext.Value is T decl)
+        var firstDecl = _codeGenerator.ReverseContext().OfType<Decl>().FirstOrDefault();
+        if (firstDecl is T decl)
         {
             value = decl;
             return true;
@@ -925,15 +918,13 @@ internal class TypeCaster
         return false;
     }
 
-    public void Visit(Expr expr, LinkedList<Cursor> context)
+    public void Visit(Expr expr)
     {
         // already processed
         if (_casts.ContainsKey(expr))
         {
             return;
         }
-
-        _context = context;
 
         var l = GetExprType(expr);
         if (_codeGenerator.IsPrevBoolContext(expr))

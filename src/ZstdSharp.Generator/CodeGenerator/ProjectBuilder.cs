@@ -21,6 +21,7 @@ internal class ProjectBuilder
     private readonly Dictionary<string, FileBuilder> _builders = new();
     private readonly Dictionary<string, FileBuilder> _methodBuilders = new();
     private readonly HashSet<string> _generatedTypes = new();
+    private readonly HashSet<string> _generatedInitConstructor = new();
 
     public ProjectBuilder(ProjectBuilderConfig config, IReporter reporter)
     {
@@ -33,6 +34,14 @@ internal class ProjectBuilder
         lock (this)
         {
             return _generatedTypes.Add(name);
+        }
+    }
+
+    internal bool AddInitConstructor(string name)
+    {
+        lock (this)
+        {
+            return _generatedInitConstructor.Add(name);
         }
     }
 
@@ -64,15 +73,15 @@ internal class ProjectBuilder
     public IEnumerable<FileBuilder> GetBuilders() => _builders.Values;
 
     public bool TryGetTypeDeclaration(string name,
-        [MaybeNullWhen(false)] out TypeDeclarationSyntax typeDeclaration)
+        [MaybeNullWhen(false)] out TypeDeclarationSyntax typeDeclaration, [MaybeNullWhen(false)] out FileBuilder fileBuilder)
     {
-        if (!TryGetBuilder(name, out var builder))
+        if (!TryGetBuilder(name, out fileBuilder))
         {
             typeDeclaration = null;
             return false;
         }
 
-        typeDeclaration = builder.Members.OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.ToString() == name);
+        typeDeclaration = fileBuilder.Members.OfType<TypeDeclarationSyntax>().FirstOrDefault(t => t.Identifier.ToString() == name);
         return typeDeclaration != null;
     }
 

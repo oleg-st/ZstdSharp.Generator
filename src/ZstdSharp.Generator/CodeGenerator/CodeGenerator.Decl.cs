@@ -185,32 +185,18 @@ internal partial class CodeGenerator
         var type = varDecl.Type;
         var cSharpType = GetRemappedCSharpType(varDecl, type, out var arrayConvertedToPointer);
 
-        var isField = false;
-        string? fileName = null;
-
-        if (IsPrevContextDecl<TranslationUnitDecl>() || IsPrevContextDecl<LinkageSpecDecl>() ||
-            IsPrevContextDecl<RecordDecl>())
+        var isVarDeclField = IsVarDeclField(varDecl);
+        // skip
+        if (isVarDeclField == null)
         {
-            if (!varDecl.HasInit)
-            {
-                // Nothing to do if a top level const declaration doesn't have an initializer
-                return null;
-            }
-
-            fileName = GetMethodsFileName(varDecl);
-            isField = true;
-        }
-        else
-        {
-            if (varDecl.Kind != CX_DeclKind.CX_DeclKind_ParmVar && type is ArrayType && (varDecl.StorageClass == CX_StorageClass.CX_SC_Static || type.CanonicalType.IsLocalConstQualified))
-            {
-                fileName = GetMethodsFileName(varDecl);
-                isField = true;
-            }
+            return null;
         }
 
+        var isField = isVarDeclField.Value;
         if (isField)
         {
+            var fileName = GetMethodsFileName(varDecl);
+
             if (!_projectBuilder.AddGeneratedType(name))
             {
                 return null;

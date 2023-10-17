@@ -430,19 +430,6 @@ internal partial class CodeGenerator
         }
     }
 
-    private bool IsPrevContextDecl<T>()
-        where T : Decl
-    {
-        var previousContext = _context.Last?.Previous;
-
-        while (previousContext?.Value is not Decl && previousContext != null)
-        {
-            previousContext = previousContext.Previous;
-        }
-
-        return previousContext?.Value is T;
-    }
-
     public string GetTypeFileName(NamedDecl namedDecl) => GetRemappedCursorName(namedDecl);
 
     // todo

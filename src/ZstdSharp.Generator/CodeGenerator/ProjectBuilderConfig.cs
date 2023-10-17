@@ -27,6 +27,7 @@ internal class ProjectBuilderConfig
 
     public bool ArrayCreateOptimization { get; }
     public bool UseDllExport { get; }
+    public bool AvoidObjectInitializationInStatic { get; }
 
     public ProjectBuilderConfig(string namespaceName, string outputLocation,
         string unsafeOutputLocation, string sourceLocation,
@@ -39,7 +40,8 @@ internal class ProjectBuilderConfig
         bool hideFunctionPointers = true,
         bool convertNestedArraysToMultidimensional = false,
         bool arrayCreateOptimization = true,
-        bool useDllExport = true)
+        bool useDllExport = true,
+        bool avoidObjectInitializationInStatic = true)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -59,5 +61,6 @@ internal class ProjectBuilderConfig
         ConvertNestedArraysToMultidimensional = convertNestedArraysToMultidimensional;
         ArrayCreateOptimization = arrayCreateOptimization;
         UseDllExport = useDllExport;
+        AvoidObjectInitializationInStatic = avoidObjectInitializationInStatic;
     }
 }
