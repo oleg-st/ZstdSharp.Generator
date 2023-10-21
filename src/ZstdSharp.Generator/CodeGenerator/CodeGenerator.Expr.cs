@@ -302,14 +302,11 @@ internal partial class CodeGenerator
 
         ExpressionSyntax? ForType(InitListExpr innerInitListExpr, Type type)
         {
+            type = UnwrapElaborated(type);
+
             if (type is ArrayType arrayType)
             {
                 return ForArrayType(innerInitListExpr, arrayType);
-            }
-
-            if (type is ElaboratedType elaboratedType)
-            {
-                return ForType(innerInitListExpr, elaboratedType.NamedType);
             }
 
             if (type is RecordType recordType)
@@ -317,7 +314,7 @@ internal partial class CodeGenerator
                 return ForRecordType(innerInitListExpr, recordType);
             }
 
-            if (type is TypedefType typedefType)
+            if (UnwrapElaborated(type) is TypedefType typedefType)
             {
                 return ForType(innerInitListExpr, typedefType.Decl.UnderlyingType);
             }
@@ -486,7 +483,8 @@ internal partial class CodeGenerator
             var functionPointerType = GetCalleeFunctionProtoType(callExpr.Callee);
             if (functionPointerType != null)
             {
-                calleeExpression = SyntaxFactory.ParenthesizedExpression(CreateCast(callExpr, GetFunctionPointerType(callExpr.Callee, functionPointerType), calleeExpression));
+                calleeExpression = SyntaxFactory.ParenthesizedExpression(CreateCast(callExpr,
+                    GetFunctionPointerType(callExpr.Callee, functionPointerType), calleeExpression));
             }
         }
 

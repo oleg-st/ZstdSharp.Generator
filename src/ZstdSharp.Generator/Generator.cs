@@ -72,6 +72,8 @@ public class Generator
             "--std=c99",
             // turn off dynamic bmi2
             "-DDYNAMIC_BMI2=0",
+            // export symbols
+            "-DZSTD_DLL_EXPORT=1",
             "-fparse-all-comments",
         };
 

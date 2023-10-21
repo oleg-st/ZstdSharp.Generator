@@ -764,7 +764,7 @@ internal class TypeCaster
 
     private FunctionProtoType? GetFunctionProtoType(CallExpr callExpr)
     {
-        return callExpr.Callee.Type switch
+        return _codeGenerator.UnwrapElaborated(callExpr.Callee.Type) switch
         {
             ClangSharp.PointerType {PointeeType: FunctionProtoType directFunctionProtoType} =>
                 directFunctionProtoType,
@@ -997,19 +997,12 @@ internal class TypeCaster
 
     private Type GetInnerType(Type type)
     {
-        while (true)
+        type = _codeGenerator.UnwrapElaborated(type);
+        if (type is TypedefType typedefType)
         {
-            switch (type)
-            {
-                case ElaboratedType elaboratedType:
-                    type = elaboratedType.NamedType;
-                    continue;
-                case TypedefType typedefType:
-                    type = typedefType.Decl.UnderlyingType;
-                    continue;
-                default:
-                    return type;
-            }
+            return GetInnerType(typedefType.Decl.UnderlyingType);
         }
+
+        return type;
     }
 }

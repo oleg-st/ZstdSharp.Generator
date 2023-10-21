@@ -798,13 +798,11 @@ internal partial class CodeGenerator
 
         void ForPointeeType(TypedefDecl innerTypedefDecl, Type? parentType, Type pointeeType)
         {
+            pointeeType = UnwrapElaborated(pointeeType);
+
             if (pointeeType is AttributedType attributedType)
             {
                 ForPointeeType(innerTypedefDecl, attributedType, attributedType.ModifiedType);
-            }
-            else if (pointeeType is ElaboratedType elaboratedType)
-            {
-                ForPointeeType(innerTypedefDecl, elaboratedType, elaboratedType.NamedType);
             }
             else if (pointeeType is FunctionProtoType functionProtoType)
             {
@@ -826,6 +824,8 @@ internal partial class CodeGenerator
 
         void ForUnderlyingType(TypedefDecl innerTypedefDecl, Type underlyingType)
         {
+            underlyingType = UnwrapElaborated(underlyingType);
+
             if (underlyingType is ArrayType)
             {
                 // Nothing to do for array types
@@ -837,10 +837,6 @@ internal partial class CodeGenerator
             else if (underlyingType is BuiltinType)
             {
                 // Nothing to do for builtin types
-            }
-            else if (underlyingType is ElaboratedType elaboratedType)
-            {
-                ForUnderlyingType(innerTypedefDecl, elaboratedType.NamedType);
             }
             else if (underlyingType is FunctionProtoType functionProtoType)
             {

@@ -251,14 +251,13 @@ internal partial class CodeGenerator
     {
         var name = namedDecl.Name.Replace('\\', '/');
 
-        if (string.IsNullOrWhiteSpace(name))
+        if (string.IsNullOrWhiteSpace(name) || name.Contains('('))
         {
             if (namedDecl is TypeDecl typeDecl)
             {
                 if (typeDecl is TagDecl {Handle.IsAnonymous: true} tagDecl)
                 {
                     name = GetAnonymousName(tagDecl, tagDecl.TypeForDecl.KindSpelling);
-
                 }
                 else
                 {

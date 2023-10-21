@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Reflection.Emit;
 using System.Text;
 using ClangSharp;
 using ClangSharp.Interop;
@@ -134,14 +133,15 @@ internal partial class CodeGenerator
             return GetType("IntPtr");
         }
 
-        if (pointeeType is TypedefType typedefType &&
+        if (UnwrapElaborated(pointeeType) is TypedefType typedefType &&
             typedefType.Decl.UnderlyingType is FunctionProtoType functionProtoType)
         {
             if (UseFunctionPointerForType(pointeeType.AsString))
             {
+                var functionPointerType = GetFunctionPointerType(cursor, functionProtoType);
                 return Config.HideFunctionPointers
-                    ? GetType("void*")
-                    : GetFunctionPointerType(cursor, functionProtoType);
+                    ? HideFunctionPointer(functionPointerType)
+                    : functionPointerType;
             }
 
             return GetType(pointeeType.AsString);
@@ -164,6 +164,8 @@ internal partial class CodeGenerator
         bool innerPointer = false,
         bool useTypeDef = false, bool canConvertArrayToPointer = true)
     {
+        type = UnwrapElaborated(type);
+
         var name = new StringBuilder(type.AsString)
             .Replace('\\', '/')
             .Replace("struct ", "")
@@ -292,9 +294,6 @@ internal partial class CodeGenerator
             case DeducedType deducedType:
                 cSharpType = GetCSharpType(cursor, deducedType.CanonicalType, out _);
                 break;
-            case ElaboratedType elaboratedType:
-                cSharpType = GetCSharpType(cursor, elaboratedType.NamedType, out _);
-                break;
             case FunctionType functionType:
                 cSharpType = GetCSharpTypeForPointeeType(cursor, functionType);
                 break;
@@ -333,9 +332,10 @@ internal partial class CodeGenerator
 
                             if (useFunctionPointer)
                             {
+                                var functionPointerType = GetFunctionPointerType(cursor, functionProtoType);
                                 cSharpType = Config.HideFunctionPointers
-                                    ? GetType("void*")
-                                    : GetFunctionPointerType(cursor, functionProtoType);
+                                    ? HideFunctionPointer(functionPointerType)
+                                    : functionPointerType;
                             }
                             else
                             {
@@ -381,7 +381,7 @@ internal partial class CodeGenerator
                 return functionProtoType;
             }
 
-            if (pointeeType is TypedefType typedefType &&
+            if (UnwrapElaborated(pointeeType) is TypedefType typedefType &&
                 typedefType.Decl.UnderlyingType is FunctionProtoType functionProtoType2)
             {
                 return functionProtoType2;
@@ -391,9 +391,11 @@ internal partial class CodeGenerator
         return null;
     }
 
+    internal Type UnwrapElaborated(Type type) => type is ElaboratedType elaboratedType ? UnwrapElaborated(elaboratedType.NamedType) : type;
+
     internal FunctionProtoType? GetCalleeFunctionProtoType(Expr callee)
     {
-        if (callee.Type is TypedefType typedefType2 && typedefType2.Decl.UnderlyingType is PointerType
+        if (UnwrapElaborated(callee.Type) is TypedefType typedefType2 && typedefType2.Decl.UnderlyingType is PointerType
             {
                 PointeeType: FunctionProtoType functionProtoType
             } && UseFunctionPointerForType(typedefType2.AsString))
@@ -401,10 +403,11 @@ internal partial class CodeGenerator
             return functionProtoType;
         }
 
-        if (callee.Type is PointerType
+        if (callee.Type is PointerType type &&
+            UnwrapElaborated(type.PointeeType) is TypedefType
             {
-                PointeeType: TypedefType { Decl.UnderlyingType: FunctionProtoType functionProtoType2 } typedefType
-            } && UseFunctionPointerForType(typedefType.AsString))
+                Decl.UnderlyingType: FunctionProtoType functionProtoType2
+            } typedefType && UseFunctionPointerForType(typedefType.AsString))
         {
             return functionProtoType2;
         }
@@ -467,7 +470,7 @@ internal partial class CodeGenerator
             name += $"_e__{(recordDecl.IsUnion ? "Union" : "Struct")}";
         }
 
-        return GetType(name);
+        return GetType(name).WithTriviaFrom(cSharpType);
     }
 
     private TypeSyntax? GetElementType(TypeSyntax type, out int arrayLevel)
@@ -790,7 +793,7 @@ internal partial class CodeGenerator
     }
 
     internal bool IsSupportedFixedBufferType(Expr expr) =>
-        expr.Type is TypedefType typedefType &&
+        UnwrapElaborated(expr.Type) is TypedefType typedefType &&
         typedefType.Decl.UnderlyingType is ConstantArrayType constantArrayType &&
         IsSupportedFixedSizedBufferType(GetCSharpType(expr, constantArrayType.ElementType, out _)
             .ToString());
@@ -887,4 +890,7 @@ internal partial class CodeGenerator
             }
         }
     }
+
+    private TypeSyntax HideFunctionPointer(TypeSyntax typeSyntax) 
+        => GetType("void*");
 }
