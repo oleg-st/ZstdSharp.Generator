@@ -21,16 +21,18 @@ public class Generator
 {
     private readonly string _inputLocation;
     private readonly string _outputLocation;
+    private readonly bool _withMultiThread;
     private readonly string _unsafeOutputLocation;
     private readonly string _sourceLocation;
     private readonly List<string> _fileNames;
-    private readonly string[] _clangCommandLineArgs;
+    private readonly List<string> _clangCommandLineArgs;
     private readonly ProjectBuilder _projectBuilder;
 
-    public Generator(string inputLocation, string outputLocation)
+    public Generator(string inputLocation, string outputLocation, bool withMultiThread = false)
     {
         _inputLocation = inputLocation;
         _outputLocation = outputLocation;
+        _withMultiThread = withMultiThread;
         _unsafeOutputLocation = Path.Combine(_outputLocation, "Unsafe");
         _sourceLocation = "Source";
 
@@ -64,9 +66,9 @@ public class Generator
             // dictBuilder
             "dictBuilder/cover.c",
             "dictBuilder/fastcover.c",
-            "dictBuilder/zdict.c"
+            "dictBuilder/zdict.c",
         };
-        _clangCommandLineArgs = new[]
+        _clangCommandLineArgs = new List<string>
         {
             "--language=c",
             "--std=c99",
@@ -76,6 +78,13 @@ public class Generator
             "-DZSTD_DLL_EXPORT=1",
             "-fparse-all-comments",
         };
+
+        if (_withMultiThread)
+        {
+            _fileNames.Add("compress/zstdmt_compress.c");
+            _fileNames.Add("common/pool.c");
+            _clangCommandLineArgs.Add("-DZSTD_MULTITHREAD");
+        }
 
         _projectBuilder = new ProjectBuilder(GetConfig(), new Reporter());
 
@@ -100,7 +109,7 @@ public class Generator
             {"size_t", "nuint"},
             {"ptrdiff_t", "nint"},
             {"POOL_ctx_s", "void"},
-            {"__m128i", "Vector128<sbyte>"}
+            {"__m128i", "Vector128<sbyte>"},
         };
         var structToClasses = new HashSet<string>
         {
@@ -173,10 +182,6 @@ public class Generator
             {"FSE_getErrorName", new CallReplacer.CallReplacementIdentity(new TypeCaster.StringType())},
             {"HUF_getErrorName", new CallReplacer.CallReplacementIdentity(new TypeCaster.StringType())},
             {"XXH_memcpy", new CallReplacer.CallReplacementIdentity(new TypeCaster.VoidType())},
-            // remove
-            {"POOL_create", new CallReplacer.CallReplacementExpression("null", new TypeCaster.PointerType("void*"))},
-            {"POOL_add", new CallReplacer.CallReplacementRemove()},
-            {"POOL_free", new CallReplacer.CallReplacementRemove()},
             // vector
             {"_mm_set1_epi8", new CallReplacer.CallReplacementInvocation("Vector128.Create", new TypeCaster.Vector128Type("Vector128<sbyte>"), "System.Runtime.Intrinsics")},
             {"_mm_loadu_si128", new CallReplacer.CallReplacementInvocation("Sse2.LoadVector128", new TypeCaster.Vector128Type("Vector128<sbyte>"), "System.Runtime.Intrinsics.X86",
@@ -191,6 +196,13 @@ public class Generator
             {"XXH_read32", new CallReplacer.CallReplacementInvocation("MEM_read32", TypeCaster.IntegerType.Create("uint"), argumentTypes: new TypeCaster.CustomType[] { new TypeCaster.PointerType("void*") })},
             {"XXH_read64", new CallReplacer.CallReplacementInvocation("MEM_read64", TypeCaster.IntegerType.Create("ulong"), argumentTypes: new TypeCaster.CustomType[] { new TypeCaster.PointerType("void*") })},
         };
+        if (!_withMultiThread)
+        {
+            // remove
+            callReplacements["POOL_create"] = new CallReplacer.CallReplacementExpression("null", new TypeCaster.PointerType("void*"));
+            callReplacements["POOL_add"] = new CallReplacer.CallReplacementRemove();
+            callReplacements["POOL_free"] = new CallReplacer.CallReplacementRemove();
+        }
         var traversalNames = new DirectoryInfo(_inputLocation)
             .GetFiles("*", SearchOption.AllDirectories)
             .Where(x => x.Name != "cpu.h")
@@ -234,6 +246,13 @@ public class Generator
         {
             "ZSTD_getAllMatchesFn", "ZSTD_blockCompressor",
         };
+
+        if (_withMultiThread)
+        {
+            remappedNames.Remove("POOL_ctx_s");
+            remappedNames["_RTL_CONDITION_VARIABLE"] = "void*";
+            remappedNames["_RTL_CRITICAL_SECTION"] = "void*";
+        }
 
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
             remappedNames: remappedNames,
@@ -328,7 +347,7 @@ public class Generator
 
                 newUnsavedFiles[filePath] = contents;
 
-                var parser = new Parser(filePath, _clangCommandLineArgs, translationFlags,
+                var parser = new Parser(filePath, _clangCommandLineArgs.ToArray(), translationFlags,
                     newUnsavedFiles.Select(kvp => CXUnsavedFile.Create(kvp.Key, kvp.Value)).ToArray());
 
                 var skipProcessing = false;
@@ -393,7 +412,7 @@ public class Generator
         var macroCollector = new MacroCollector();
 
         var filePath = Path.Combine(_inputLocation, file);
-        var parser = new Parser(filePath, _clangCommandLineArgs, translationFlags, Array.Empty<CXUnsavedFile>());
+        var parser = new Parser(filePath, _clangCommandLineArgs.ToArray(), translationFlags, Array.Empty<CXUnsavedFile>());
 
         var skipProcessing = false;
 
