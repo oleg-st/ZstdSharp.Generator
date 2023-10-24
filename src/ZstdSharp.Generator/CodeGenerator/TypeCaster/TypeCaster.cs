@@ -963,8 +963,11 @@ internal class TypeCaster
                     var functionProtoType = GetFunctionProtoType(callExpr);
                     if (functionProtoType != null)
                     {
-                        var argType = GetCustomType(expr, functionProtoType.ParamTypes[index]);
-                        CastTo(expr, l, argType, true);
+                        if (index < functionProtoType.ParamTypes.Count)
+                        {
+                            var argType = GetCustomType(expr, functionProtoType.ParamTypes[index]);
+                            CastTo(expr, l, argType, true);
+                        }
                     }
                 }
             }

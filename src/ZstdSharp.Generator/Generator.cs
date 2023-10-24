@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using ClangSharp;
 using ClangSharp.Interop;
 using ZstdSharp.Generator.CodeGenerator;
+using ZstdSharp.Generator.CodeGenerator.CallModifiers;
 using ZstdSharp.Generator.CodeGenerator.Macros;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
 using ZstdSharp.Generator.CodeGenerator.TypeCaster;
@@ -27,6 +28,7 @@ public class Generator
     private readonly List<string> _fileNames;
     private readonly List<string> _clangCommandLineArgs;
     private readonly ProjectBuilder _projectBuilder;
+    private readonly List<ICallsModifier> _callsModifiers;
 
     public Generator(string inputLocation, string outputLocation, bool withMultiThread = false)
     {
@@ -86,7 +88,10 @@ public class Generator
             _clangCommandLineArgs.Add("-DZSTD_MULTITHREAD");
         }
 
-        _projectBuilder = new ProjectBuilder(GetConfig(), new Reporter());
+        var reporter = new Reporter();
+        _callsModifiers = new List<ICallsModifier>
+            {new DisplayCallsRemover(), new PrefetchCalls(), new AssertCalls(), new IsLittleEndianCalls()};
+        _projectBuilder = new ProjectBuilder(GetConfig(), reporter);
 
         CheckFiles();
     }
@@ -139,9 +144,7 @@ public class Generator
         {
             {"MEM_64bits", new CallReplacer.CallReplacementExpression("MEM_64bits", new TypeCaster.BoolType())},
             {"MEM_32bits", new CallReplacer.CallReplacementExpression("MEM_32bits", new TypeCaster.BoolType())},
-            {"MEM_isLittleEndian", new CallReplacer.CallReplacementExpression("BitConverter.IsLittleEndian", new TypeCaster.BoolType(), "System")},
             {"ZSTD_cpuid_bmi2", new CallReplacer.CallReplacementExpression("0", TypeCaster.IntegerType.Create("int"))},
-            {"IsLittleEndian", new CallReplacer.CallReplacementExpression("BitConverter.IsLittleEndian", new TypeCaster.BoolType(), "System")},
             {"__builtin_rotateleft32", new CallReplacer.CallReplacementInvocation("BitOperations.RotateLeft", TypeCaster.IntegerType.Create("uint"),
                 "System.Numerics", new TypeCaster.CustomType[] { TypeCaster.IntegerType.Create("uint"), TypeCaster.IntegerType.Create("int") })},
             {"__builtin_rotateleft64", new CallReplacer.CallReplacementInvocation("BitOperations.RotateLeft",TypeCaster.IntegerType.Create("ulong"),
@@ -161,10 +164,6 @@ public class Generator
             {"memcpy", new CallReplacer.CallReplacementInvocation("memcpy",new TypeCaster.VoidType(),
                 "static ZstdSharp.UnsafeHelper", new TypeCaster.CustomType[] { new TypeCaster.PointerType("void*"), new TypeCaster.PointerType("void*"), TypeCaster.IntegerType.Create("uint") })},
             {"ZSTD_cpuSupportsBmi2", new CallReplacer.CallReplacementExpression("0", TypeCaster.IntegerType.Create("int"))},
-            {"assert", new CallReplacer.CallReplacementIdentity(new TypeCaster.VoidType(), "static ZstdSharp.UnsafeHelper")},
-            {"Prefetch0", new CallReplacer.CallReplacementIdentity(new TypeCaster.VoidType(), "static ZstdSharp.UnsafeHelper")},
-            {"Prefetch1", new CallReplacer.CallReplacementIdentity(new TypeCaster.VoidType(), "static ZstdSharp.UnsafeHelper")},
-
             // bool
             {"ERR_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
             {"HUF_isError", new CallReplacer.CallReplacementIdentity(new TypeCaster.BoolType())},
@@ -254,6 +253,14 @@ public class Generator
             remappedNames["_RTL_CRITICAL_SECTION"] = "void*";
         }
 
+        foreach (var callsModifier in _callsModifiers)
+        {
+            foreach (var (name, callReplacement) in callsModifier.GetCallReplacements())
+            {
+                callReplacements[name] = callReplacement;
+            }
+        }
+
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
             remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
@@ -286,19 +293,19 @@ public class Generator
 
         var overrideMacros = new Dictionary<string, string>
         {
-            { "assert", "assert(c) assert(c)" },
-            { "XXH_STATIC_ASSERT", "XXH_STATIC_ASSERT(c) assert(c)" },
-            { "XXH_CPU_LITTLE_ENDIAN", "XXH_CPU_LITTLE_ENDIAN IsLittleEndian()" },
+            // remove internal helper
             { "_FORCE_HAS_FORMAT_STRING", "_FORCE_HAS_FORMAT_STRING(...) {}" },
-            { "PREFETCH_L1", "PREFETCH_L1(ptr) Prefetch0(ptr)"},
-            { "PREFETCH_L2", "PREFETCH_L2(ptr) Prefetch1(ptr)"},
-            // fastcover
-            { "DISPLAY", "DISPLAY(...) {}" },
-            { "DISPLAYLEVEL", "DISPLAYLEVEL(...) {}" },
-            { "DISPLAYUPDATE", "DISPLAYUPDATE(...) {}" },
             // branchless in .NET 8
             { "BOUNDED", "BOUNDED(min,val,max) ((val) <= (min) ? (min) : ((val) <= (max) ? (val) : (max)))"}
         };
+
+        foreach (var callsModifier in _callsModifiers)
+        {
+            foreach (var (name, macro) in callsModifier.GetMacros())
+            {
+                overrideMacros[name] = macro;
+            }
+        }
 
         var macros = macroStorage.Macros;
 
@@ -343,7 +350,8 @@ public class Generator
                     contents = File.ReadAllText(filePath);
                 }
 
-                contents = "int IsLittleEndian();\r\nvoid assert(int c);\r\nvoid Prefetch0(const void* ptr);\r\nvoid Prefetch1(const void* ptr);\r\n\r\n" + contents;
+                contents = string.Join("\r\n", _callsModifiers.Select(callsModifier => callsModifier.GetDefinitions())) +
+                           "\r\n" + contents;
 
                 newUnsavedFiles[filePath] = contents;
 
