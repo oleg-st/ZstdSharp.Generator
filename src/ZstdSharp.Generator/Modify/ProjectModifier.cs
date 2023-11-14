@@ -376,17 +376,8 @@ internal class ProjectModifier
 
         // Skip inits
         ModifyMethod("ZSTD_buildSequencesStatistics", (_, method) => AddSkipInit(method, "stats"));
-
-        ModifyMethod("ZSTD_compressBlock_opt_generic", (_, method) => AddSkipInit(method, "lastSequence"));
-
-        ModifyMethod("ZSTD_decompressSequences_bodySplitLitBuffer", (_, method) => AddSkipInit(method, "seqState"));
-
-        ModifyMethod("ZSTD_decompressSequences_body", (_, method) => AddSkipInit(method, "seqState"));
-
-        ModifyMethod("ZSTD_decompressSequencesLong_body", (_, method) => AddSkipInit(method, "seqState"));
-
         ModifyMethod("ZSTD_errorFrameSizeInfo", (_, method) => AddSkipInit(method, "frameSizeInfo"));
-
+        // remove inlining
         ModifyMethod("ZSTD_encodeSequences_body",
             (_, method) => method
                 .WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Where(attributeList =>
