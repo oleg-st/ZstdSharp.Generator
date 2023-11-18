@@ -325,7 +325,7 @@ internal partial class CodeGenerator
                         if (typedefType.Decl.UnderlyingType is PointerType { PointeeType: FunctionProtoType functionProtoType })
                         {
                             var useFunctionPointer = UseFunctionPointerForType(name);
-                            if (useFunctionPointer && arrayLevel > 1)
+                            if (!Config.HideFunctionPointers && useFunctionPointer && arrayLevel > 1)
                             {
                                 _reporter.Report(DiagnosticLevel.Warning, $"Nested array with function pointer {name}");
                             }

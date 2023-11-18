@@ -240,12 +240,6 @@ public class Generator
             "ZSTD_hash4PtrS", "ZSTD_hash5PtrS", "ZSTD_hash6PtrS", "ZSTD_hash7PtrS", "ZSTD_hash8PtrS",
         };
 
-        // inside of nested arrays, don't work in Mono (Android)
-        var excludeFunctionPointers = new HashSet<string>
-        {
-            "ZSTD_getAllMatchesFn", "ZSTD_blockCompressor",
-        };
-
         if (_withMultiThread)
         {
             remappedNames.Remove("POOL_ctx_s");
@@ -264,8 +258,7 @@ public class Generator
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
             remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
-            callReplacements: callReplacements, structToClasses: structToClasses,
-            excludeFunctionPointers: excludeFunctionPointers);
+            callReplacements: callReplacements, structToClasses: structToClasses);
     }
 
     public async Task Generate()
