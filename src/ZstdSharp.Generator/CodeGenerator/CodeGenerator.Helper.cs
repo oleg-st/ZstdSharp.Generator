@@ -865,12 +865,7 @@ internal partial class CodeGenerator
                 var cSharpType = GetRemappedCSharpType(fieldDecl, type, out _);
                 yield return SyntaxFactory.Parameter(
                         SyntaxFactory.Identifier(fieldName))
-                    .WithType(cSharpType)
-                    .WithDefault(
-                        SyntaxFactory.EqualsValueClause(
-                            SyntaxFactory.LiteralExpression(
-                                SyntaxKind.DefaultLiteralExpression,
-                                SyntaxFactory.Token(SyntaxKind.DefaultKeyword))));
+                    .WithType(cSharpType);
             }
         }
 
