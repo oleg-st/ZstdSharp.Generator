@@ -521,72 +521,72 @@ internal partial class CodeGenerator
         }
     }
 
-    private static SyntaxKind? GetBinaryKind(CX_BinaryOperatorKind operatorKind)
+    private static SyntaxKind? GetBinaryKind(CXBinaryOperatorKind operatorKind)
     {
         return operatorKind switch
         {
-            CX_BinaryOperatorKind.CX_BO_Add => SyntaxKind.AddExpression,
-            CX_BinaryOperatorKind.CX_BO_Sub => SyntaxKind.SubtractExpression,
-            CX_BinaryOperatorKind.CX_BO_Mul => SyntaxKind.MultiplyExpression,
-            CX_BinaryOperatorKind.CX_BO_Div => SyntaxKind.DivideExpression,
-            CX_BinaryOperatorKind.CX_BO_Rem => SyntaxKind.ModuloExpression,
-            CX_BinaryOperatorKind.CX_BO_Shl => SyntaxKind.LeftShiftExpression,
-            CX_BinaryOperatorKind.CX_BO_Shr => SyntaxKind.RightShiftExpression,
-            CX_BinaryOperatorKind.CX_BO_LOr => SyntaxKind.LogicalOrExpression,
-            CX_BinaryOperatorKind.CX_BO_LAnd => SyntaxKind.LogicalAndExpression,
-            CX_BinaryOperatorKind.CX_BO_Or => SyntaxKind.BitwiseOrExpression,
-            CX_BinaryOperatorKind.CX_BO_And => SyntaxKind.BitwiseAndExpression,
-            CX_BinaryOperatorKind.CX_BO_Xor => SyntaxKind.ExclusiveOrExpression,
-            CX_BinaryOperatorKind.CX_BO_EQ => SyntaxKind.EqualsExpression,
-            CX_BinaryOperatorKind.CX_BO_NE => SyntaxKind.NotEqualsExpression,
-            CX_BinaryOperatorKind.CX_BO_LT => SyntaxKind.LessThanExpression,
-            CX_BinaryOperatorKind.CX_BO_LE => SyntaxKind.LessThanOrEqualExpression,
-            CX_BinaryOperatorKind.CX_BO_GT => SyntaxKind.GreaterThanExpression,
-            CX_BinaryOperatorKind.CX_BO_GE => SyntaxKind.GreaterThanOrEqualExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Add => SyntaxKind.AddExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Sub => SyntaxKind.SubtractExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Mul => SyntaxKind.MultiplyExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Div => SyntaxKind.DivideExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Rem => SyntaxKind.ModuloExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Shl => SyntaxKind.LeftShiftExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Shr => SyntaxKind.RightShiftExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_LOr => SyntaxKind.LogicalOrExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_LAnd => SyntaxKind.LogicalAndExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Or => SyntaxKind.BitwiseOrExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_And => SyntaxKind.BitwiseAndExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Xor => SyntaxKind.ExclusiveOrExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_EQ => SyntaxKind.EqualsExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_NE => SyntaxKind.NotEqualsExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_LT => SyntaxKind.LessThanExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_LE => SyntaxKind.LessThanOrEqualExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_GT => SyntaxKind.GreaterThanExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_GE => SyntaxKind.GreaterThanOrEqualExpression,
             _ => null
         };
     }
 
-    private static SyntaxKind? GetAssignmentKind(CX_BinaryOperatorKind operatorKind)
+    private static SyntaxKind? GetAssignmentKind(CXBinaryOperatorKind operatorKind)
     {
         return operatorKind switch
         {
-            CX_BinaryOperatorKind.CX_BO_Assign => SyntaxKind.SimpleAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_MulAssign => SyntaxKind.MultiplyAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_DivAssign => SyntaxKind.DivideAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_RemAssign => SyntaxKind.ModuloAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_AddAssign => SyntaxKind.AddAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_SubAssign => SyntaxKind.SubtractAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_ShlAssign => SyntaxKind.LeftShiftAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_ShrAssign => SyntaxKind.RightShiftAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_AndAssign => SyntaxKind.AndAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_XorAssign => SyntaxKind.ExclusiveOrAssignmentExpression,
-            CX_BinaryOperatorKind.CX_BO_OrAssign => SyntaxKind.OrAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_Assign => SyntaxKind.SimpleAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_MulAssign => SyntaxKind.MultiplyAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_DivAssign => SyntaxKind.DivideAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_RemAssign => SyntaxKind.ModuloAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_AddAssign => SyntaxKind.AddAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_SubAssign => SyntaxKind.SubtractAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_ShlAssign => SyntaxKind.LeftShiftAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_ShrAssign => SyntaxKind.RightShiftAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_AndAssign => SyntaxKind.AndAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_XorAssign => SyntaxKind.ExclusiveOrAssignmentExpression,
+            CXBinaryOperatorKind.CXBinaryOperator_OrAssign => SyntaxKind.OrAssignmentExpression,
             _ => null
         };
     }
 
-    private static SyntaxKind? GetUnaryKind(CX_UnaryOperatorKind operatorKind)
+    private static SyntaxKind? GetUnaryKind(CXUnaryOperatorKind operatorKind)
     {
         return operatorKind switch
         {
-            CX_UnaryOperatorKind.CX_UO_PreInc => SyntaxKind.PreIncrementExpression,
-            CX_UnaryOperatorKind.CX_UO_PostInc => SyntaxKind.PostIncrementExpression,
-            CX_UnaryOperatorKind.CX_UO_PreDec => SyntaxKind.PreDecrementExpression,
-            CX_UnaryOperatorKind.CX_UO_PostDec => SyntaxKind.PostDecrementExpression,
-            CX_UnaryOperatorKind.CX_UO_AddrOf => SyntaxKind.AddressOfExpression,
-            CX_UnaryOperatorKind.CX_UO_Deref => SyntaxKind.PointerIndirectionExpression,
-            CX_UnaryOperatorKind.CX_UO_Plus => SyntaxKind.UnaryPlusExpression,
-            CX_UnaryOperatorKind.CX_UO_Minus => SyntaxKind.UnaryMinusExpression,
-            CX_UnaryOperatorKind.CX_UO_Not => SyntaxKind.BitwiseNotExpression,
-            CX_UnaryOperatorKind.CX_UO_LNot => SyntaxKind.LogicalNotExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_PreInc => SyntaxKind.PreIncrementExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_PostInc => SyntaxKind.PostIncrementExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_PreDec => SyntaxKind.PreDecrementExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_PostDec => SyntaxKind.PostDecrementExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_AddrOf => SyntaxKind.AddressOfExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_Deref => SyntaxKind.PointerIndirectionExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_Plus => SyntaxKind.UnaryPlusExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_Minus => SyntaxKind.UnaryMinusExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_Not => SyntaxKind.BitwiseNotExpression,
+            CXUnaryOperatorKind.CXUnaryOperator_LNot => SyntaxKind.LogicalNotExpression,
             _ => null
         };
     }
 
     private SyntaxNode? VisitBinaryOperator(BinaryOperator binaryOperator)
     {
-        if (binaryOperator.Opcode == CX_BinaryOperatorKind.CX_BO_Comma)
+        if (binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_Comma)
         {
             var left = Visit<ExpressionSyntax>(binaryOperator.LHS);
             if (left != null)
@@ -610,7 +610,7 @@ internal partial class CodeGenerator
             ExpressionSyntax expressionSyntax = SyntaxFactory.BinaryExpression((SyntaxKind)kind, left, right);
 
             // 0UL - 1 -> unchecked
-            if (binaryOperator.Opcode == CX_BinaryOperatorKind.CX_BO_Sub)
+            if (binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_Sub)
             {
                 if (binaryOperator.LHS.Type.CanonicalType.Kind == CXTypeKind.CXType_ULongLong &&
                     binaryOperator.RHS.Type.CanonicalType.Kind == CXTypeKind.CXType_ULongLong)

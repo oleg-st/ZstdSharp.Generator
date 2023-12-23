@@ -455,7 +455,7 @@ internal class TypeCaster
 
         if (expr is BinaryOperator binaryOperator)
         {
-            if (binaryOperator.Opcode is CX_BinaryOperatorKind.CX_BO_LOr or CX_BinaryOperatorKind.CX_BO_LAnd)
+            if (binaryOperator.Opcode is CXBinaryOperatorKind.CXBinaryOperator_LOr or CXBinaryOperatorKind.CXBinaryOperator_LAnd)
             {
                 // bool [&&] bool => bool
 
@@ -475,9 +475,9 @@ internal class TypeCaster
                 return new BoolType();
             }
 
-            if (binaryOperator.Opcode is CX_BinaryOperatorKind.CX_BO_LE or CX_BinaryOperatorKind.CX_BO_GE
-                or CX_BinaryOperatorKind.CX_BO_EQ or CX_BinaryOperatorKind.CX_BO_NE or CX_BinaryOperatorKind.CX_BO_LT
-                or CX_BinaryOperatorKind.CX_BO_GT)
+            if (binaryOperator.Opcode is CXBinaryOperatorKind.CXBinaryOperator_LE or CXBinaryOperatorKind.CXBinaryOperator_GE
+                or CXBinaryOperatorKind.CXBinaryOperator_EQ or CXBinaryOperatorKind.CXBinaryOperator_NE or CXBinaryOperatorKind.CXBinaryOperator_LT
+                or CXBinaryOperatorKind.CXBinaryOperator_GT)
             {
                 // same [==] same => bool
 
@@ -505,10 +505,10 @@ internal class TypeCaster
             }
 
             if (
-                binaryOperator.Opcode is CX_BinaryOperatorKind.CX_BO_AddAssign or CX_BinaryOperatorKind.CX_BO_SubAssign
-                or CX_BinaryOperatorKind.CX_BO_XorAssign or CX_BinaryOperatorKind.CX_BO_OrAssign
-                or CX_BinaryOperatorKind.CX_BO_AndAssign or CX_BinaryOperatorKind.CX_BO_Assign
-                or CX_BinaryOperatorKind.CX_BO_MulAssign or CX_BinaryOperatorKind.CX_BO_DivAssign
+                binaryOperator.Opcode is CXBinaryOperatorKind.CXBinaryOperator_AddAssign or CXBinaryOperatorKind.CXBinaryOperator_SubAssign
+                or CXBinaryOperatorKind.CXBinaryOperator_XorAssign or CXBinaryOperatorKind.CXBinaryOperator_OrAssign
+                or CXBinaryOperatorKind.CXBinaryOperator_AndAssign or CXBinaryOperatorKind.CXBinaryOperator_Assign
+                or CXBinaryOperatorKind.CXBinaryOperator_MulAssign or CXBinaryOperatorKind.CXBinaryOperator_DivAssign
             )
             {
                 // same [+=] same => same
@@ -544,9 +544,9 @@ internal class TypeCaster
                 return l.Inherit();
             }
 
-            if (binaryOperator.Opcode is CX_BinaryOperatorKind.CX_BO_Add or CX_BinaryOperatorKind.CX_BO_Sub
-                or CX_BinaryOperatorKind.CX_BO_Xor or CX_BinaryOperatorKind.CX_BO_Or or CX_BinaryOperatorKind.CX_BO_And
-                or CX_BinaryOperatorKind.CX_BO_Mul or CX_BinaryOperatorKind.CX_BO_Div or CX_BinaryOperatorKind.CX_BO_Rem
+            if (binaryOperator.Opcode is CXBinaryOperatorKind.CXBinaryOperator_Add or CXBinaryOperatorKind.CXBinaryOperator_Sub
+                or CXBinaryOperatorKind.CXBinaryOperator_Xor or CXBinaryOperatorKind.CXBinaryOperator_Or or CXBinaryOperatorKind.CXBinaryOperator_And
+                or CXBinaryOperatorKind.CXBinaryOperator_Mul or CXBinaryOperatorKind.CXBinaryOperator_Div or CXBinaryOperatorKind.CXBinaryOperator_Rem
                )
             {
                 // same [+] same => same
@@ -555,16 +555,16 @@ internal class TypeCaster
                 var r = GetExprType(binaryOperator.RHS);
 
                 // bool | bool, bool & bool
-                if ((binaryOperator.Opcode == CX_BinaryOperatorKind.CX_BO_And ||
-                     binaryOperator.Opcode == CX_BinaryOperatorKind.CX_BO_Or) && l is BoolType && r is BoolType)
+                if ((binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_And ||
+                     binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_Or) && l is BoolType && r is BoolType)
                 {
-                    var kind = binaryOperator.Opcode == CX_BinaryOperatorKind.CX_BO_And
+                    var kind = binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_And
                         ? SyntaxKind.LogicalAndExpression
                         : SyntaxKind.LogicalOrExpression;
                     return CastTo(expr, new OtherType(), new LogicalBinaryType(kind));
                 }
 
-                if (binaryOperator.Opcode == CX_BinaryOperatorKind.CX_BO_Sub && l is PointerType && r is PointerType)
+                if (binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_Sub && l is PointerType && r is PointerType)
                 {
                     // ptr diff is long
                     return IntegerType.Create("long");
@@ -614,7 +614,7 @@ internal class TypeCaster
                 }
             }
 
-            if (binaryOperator.Opcode is CX_BinaryOperatorKind.CX_BO_Shl or CX_BinaryOperatorKind.CX_BO_ShlAssign or CX_BinaryOperatorKind.CX_BO_Shr or CX_BinaryOperatorKind.CX_BO_ShrAssign)
+            if (binaryOperator.Opcode is CXBinaryOperatorKind.CXBinaryOperator_Shl or CXBinaryOperatorKind.CXBinaryOperator_ShlAssign or CXBinaryOperatorKind.CXBinaryOperator_Shr or CXBinaryOperatorKind.CXBinaryOperator_ShrAssign)
             {
                 // same [>>] int => same
 
@@ -647,7 +647,7 @@ internal class TypeCaster
 
         if (expr is UnaryOperator unaryOperator)
         {
-            if (unaryOperator.Opcode == CX_UnaryOperatorKind.CX_UO_LNot)
+            if (unaryOperator.Opcode == CXUnaryOperatorKind.CXUnaryOperator_LNot)
             {
                 var l = GetExprType(unaryOperator.SubExpr);
 
@@ -659,7 +659,7 @@ internal class TypeCaster
                 return new BoolType();
             }
 
-            if (unaryOperator.Opcode == CX_UnaryOperatorKind.CX_UO_Minus)
+            if (unaryOperator.Opcode == CXUnaryOperatorKind.CXUnaryOperator_Minus)
             {
                 var l = GetExprType(unaryOperator.SubExpr);
 
@@ -671,7 +671,7 @@ internal class TypeCaster
                 }
             }
 
-            if (unaryOperator.Opcode == CX_UnaryOperatorKind.CX_UO_Not)
+            if (unaryOperator.Opcode == CXUnaryOperatorKind.CXUnaryOperator_Not)
             {
                 var l = GetExprType(unaryOperator.SubExpr);
                 if (l is IntegerType {HasValue: true, Value: { }} li)

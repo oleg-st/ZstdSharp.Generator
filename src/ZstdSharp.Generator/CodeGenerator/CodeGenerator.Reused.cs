@@ -571,7 +571,7 @@ internal partial class CodeGenerator
         var canonicalType = expr.Type.CanonicalType;
         if (canonicalType.IsIntegerType && canonicalType.Kind != CXTypeKind.CXType_Bool)
         {
-            if (expr is UnaryOperator {Opcode: CX_UnaryOperatorKind.CX_UO_LNot, SubExpr: IntegerLiteral nIntegerLiteral})
+            if (expr is UnaryOperator {Opcode: CXUnaryOperatorKind.CXUnaryOperator_LNot, SubExpr: IntegerLiteral nIntegerLiteral})
             {
                 return nIntegerLiteral.Value == 0;
             }
