@@ -56,7 +56,8 @@ internal partial class CodeGenerator
     private SyntaxNode? VisitDoStmt(DoStmt doStmt)
     {
         // do { ... } while (false) => ...
-        var constantCond = GetConstantCond(doStmt.Cond);
+        var cond = Visit<ExpressionSyntax>(doStmt.Cond)!;
+        var constantCond = GetConstantCond(cond);
         if (constantCond.HasValue && !constantCond.Value)
         {
             return Visit<StatementSyntax>(doStmt.Body);
@@ -64,7 +65,7 @@ internal partial class CodeGenerator
 
         return SyntaxFactory.DoStatement(
             VisitStatementSyntax(doStmt.Body)!,
-            Visit<ExpressionSyntax>(doStmt.Cond)!);
+            cond);
     }
 
     private SyntaxNode VisitLabelStmt(LabelStmt labelStmt)
@@ -89,14 +90,15 @@ internal partial class CodeGenerator
 
     private SyntaxNode? VisitWhileStmt(WhileStmt whileStmt)
     {
-        var constantCond = GetConstantCond(whileStmt.Cond);
+        var cond = Visit<ExpressionSyntax>(whileStmt.Cond)!;
+        var constantCond = GetConstantCond(cond);
         // while (false)
         if (constantCond.HasValue && !constantCond.Value)
         {
             return null;
         }
 
-        return SyntaxFactory.WhileStatement(Visit<ExpressionSyntax>(whileStmt.Cond)!, VisitStatementSyntax(whileStmt.Body)!);
+        return SyntaxFactory.WhileStatement(cond, VisitStatementSyntax(whileStmt.Body)!);
     }
 
     private SeparatedSyntaxList<ExpressionSyntax>? GetExpressions(Stmt? stmt, out VariableDeclarationSyntax? variableDeclarationSyntax)
@@ -343,7 +345,13 @@ internal partial class CodeGenerator
 
     private SyntaxNode? VisitIfStmt(IfStmt ifStmt)
     {
-        var constantCond = GetConstantCond(ifStmt.Cond);
+        var ifCond = Visit<ExpressionSyntax>(ifStmt.Cond);
+        if (ifCond == null)
+        {
+            return null;
+        }
+
+        var constantCond = GetConstantCond(ifCond);
         // if (true) -> then / if (false) -> else
         if (constantCond.HasValue)
         {
@@ -357,12 +365,6 @@ internal partial class CodeGenerator
         // pure cond && empty then && empty else
         var thenStatement = VisitStatementSyntax(ifStmt.Then);
         var elseStatement = ifStmt.Else != null ? VisitStatementSyntax(ifStmt.Else) : null;
-        var ifCond = Visit<ExpressionSyntax>(ifStmt.Cond);
-        if (ifCond == null)
-        {
-            return null;
-        }
-
         if (TreeHelper.IsEmptyStatement(thenStatement) && TreeHelper.IsEmptyStatement(elseStatement) && IsPureExpr(ifCond))
         {
             return null;

@@ -166,7 +166,7 @@ internal class ProjectBuilder
         // build files
         await BuildFiles();
         // add extra files
-        await FsHelper.CopyAll(Config.SourceLocation, Config.OutputLocation);
+        await FsHelper.CopyAll(Config.SourceLocation, Config.OutputLocation, Config.SourceExcludeNames);
         // simplify project
         await Simplify();
     }

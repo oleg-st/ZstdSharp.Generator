@@ -1,4 +1,6 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace ZstdSharp.Generator.CodeGenerator;
@@ -14,12 +16,12 @@ internal static class FsHelper
         await sourceStream.CopyToAsync(destinationStream);
     }
 
-    public static async Task CopyAll(string sourcePath, string destPath)
+    public static async Task CopyAll(string sourcePath, string destPath, IReadOnlySet<string> excludeNames)
     {
-        foreach (var fi in new DirectoryInfo(sourcePath).GetFiles())
+        foreach (var fi in new DirectoryInfo(sourcePath).GetFiles().Where(fi => !excludeNames.Contains(fi.Name)))
             await CopyFileAsync(fi.FullName, Path.Combine(destPath, fi.Name));
 
         foreach (var fi in new DirectoryInfo(sourcePath).GetDirectories())
-            await CopyAll(Path.Combine(sourcePath, fi.Name), Path.Combine(destPath, fi.Name));
+            await CopyAll(Path.Combine(sourcePath, fi.Name), Path.Combine(destPath, fi.Name), excludeNames);
     }
 }

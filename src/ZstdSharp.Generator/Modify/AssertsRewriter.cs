@@ -78,7 +78,8 @@ internal class AssertsRewriter : CSharpSyntaxRewriter
     {
         // if () { assert }
         // if () { assert } else { assert }
-        if (IsNodeOnlyAsserts(node.Statement) &&
+        if (CodeGenerator.CodeGenerator.IsPureExpr(node.Condition) && 
+            IsNodeOnlyAsserts(node.Statement) &&
             (node.Else == null || IsNodeOnlyAsserts(node.Else)))
         {
             return ProjectModifier.WrapWithIfDefined(node, "DEBUG");

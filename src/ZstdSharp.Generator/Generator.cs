@@ -30,7 +30,7 @@ public class Generator
     private readonly ProjectBuilder _projectBuilder;
     private readonly List<ICallsModifier> _callsModifiers;
 
-    public Generator(string inputLocation, string outputLocation, bool withMultiThread = false)
+    public Generator(string inputLocation, string outputLocation, bool withMultiThread = true)
     {
         _inputLocation = inputLocation;
         _outputLocation = outputLocation;
@@ -91,6 +91,10 @@ public class Generator
         var reporter = new Reporter();
         _callsModifiers = new List<ICallsModifier>
             {new DisplayCallsRemover(), new PrefetchCalls(), new AssertCalls(), new IsLittleEndianCalls()};
+        if (_withMultiThread)
+        {
+            _callsModifiers.Add(new SynchronizationCalls());
+        }
         _projectBuilder = new ProjectBuilder(GetConfig(), reporter);
 
         CheckFiles();
@@ -139,6 +143,8 @@ public class Generator
             "ZSTD_cpuSupportsBmi2", "ZSTD_countTrailingZeros32_fallback", "ZSTD_countLeadingZeros32_fallback", 
             // xxhash memory
             "XXH_read32", "XXH_read64",
+            // thread pool
+            "POOL_ctx_s", "POOL_job_s",
         };
         var callReplacements = new Dictionary<string, CallReplacer.CallReplacement>
         {
@@ -240,13 +246,6 @@ public class Generator
             "ZSTD_hash4PtrS", "ZSTD_hash5PtrS", "ZSTD_hash6PtrS", "ZSTD_hash7PtrS", "ZSTD_hash8PtrS",
         };
 
-        if (_withMultiThread)
-        {
-            remappedNames.Remove("POOL_ctx_s");
-            remappedNames["_RTL_CONDITION_VARIABLE"] = "void*";
-            remappedNames["_RTL_CRITICAL_SECTION"] = "void*";
-        }
-
         foreach (var callsModifier in _callsModifiers)
         {
             foreach (var (name, callReplacement) in callsModifier.GetCallReplacements())
@@ -255,10 +254,17 @@ public class Generator
             }
         }
 
+        IReadOnlySet<string>? sourceExcludeNames = null;
+        if (!_withMultiThread)
+        {
+            sourceExcludeNames = new HashSet<string>(new[]
+                {"JobThreadPool.cs", "SynchronizationWrapper.cs", "UnmanagedObject.cs", "Pool.cs"});
+        }
+
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
             remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
-            callReplacements: callReplacements, structToClasses: structToClasses);
+            callReplacements: callReplacements, structToClasses: structToClasses, sourceExcludeNames: sourceExcludeNames);
     }
 
     public async Task Generate()

@@ -5,6 +5,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using ZstdSharp.Generator.CodeGenerator;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
 
 namespace ZstdSharp.Generator.Modify;
@@ -320,87 +321,9 @@ internal class FastCLoopModifier : CSharpSyntaxRewriter
         return base.VisitConditionalExpression(node);
     }
 
-    private static bool GetValue(SyntaxNode node, out object? value)
-    {
-        value = default;
-
-        if (node is LiteralExpressionSyntax literalExpression)
-        {
-            if (literalExpression.Kind() == SyntaxKind.TrueLiteralExpression)
-            {
-                value = true;
-                return true;
-            }
-
-            if (literalExpression.Kind() == SyntaxKind.FalseLiteralExpression)
-            {
-                value = false;
-                return true;
-            }
-
-            if (literalExpression.Kind() == SyntaxKind.NumericLiteralExpression && literalExpression.Token.Value is int v)
-            {
-                value = v;
-                return true;
-
-            }
-        }
-
-        if (node is ParenthesizedExpressionSyntax parenthesizedExpression)
-        {
-            return GetValue(parenthesizedExpression.Expression, out value);
-        }
-
-        if (node is BinaryExpressionSyntax binaryExpression &&
-            GetValue(binaryExpression.Left, out var leftValue) &&
-            GetValue(binaryExpression.Right, out var rightValue))
-        {
-            if (leftValue is int leftIntValue && rightValue is int rightIntValue)
-            {
-                switch (binaryExpression.Kind())
-                {
-                    case SyntaxKind.AddExpression:
-                        value = leftIntValue + rightIntValue;
-                        return true;
-                    case SyntaxKind.SubtractExpression:
-                        value = leftIntValue - rightIntValue;
-                        return true;
-                    case SyntaxKind.MultiplyExpression:
-                        value = leftIntValue * rightIntValue;
-                        return true;
-                    case SyntaxKind.DivideExpression:
-                        value = leftIntValue / rightIntValue;
-                        return true;
-                    case SyntaxKind.EqualsExpression:
-                        value = leftIntValue == rightIntValue;
-                        return true;
-                    case SyntaxKind.LessThanExpression:
-                        value = leftIntValue < rightIntValue;
-                        return true;
-                    case SyntaxKind.GreaterThanExpression:
-                        value = leftIntValue > rightIntValue;
-                        return true;
-                    case SyntaxKind.LessThanOrEqualExpression:
-                        value = leftIntValue <= rightIntValue;
-                        return true;
-                    case SyntaxKind.GreaterThanOrEqualExpression:
-                        value = leftIntValue >= rightIntValue;
-                        return true;
-                    case SyntaxKind.NotEqualsExpression:
-                        value = leftIntValue != rightIntValue;
-                        return true;
-                    // todo other
-                }
-            }
-        }
-
-        value = default;
-        return false;
-    }
-
     private static bool GetIntValue(SyntaxNode node, out int value)
     {
-        if (GetValue(node, out var objValue) && objValue is int intValue)
+        if (TreeHelper.GetValue(node, out var objValue) && objValue is int intValue)
         {
             value = intValue;
             return true;
@@ -412,7 +335,7 @@ internal class FastCLoopModifier : CSharpSyntaxRewriter
 
     private static bool GetBoolValue(SyntaxNode node, out bool value)
     {
-        if (GetValue(node, out var objValue) && objValue is bool boolValue)
+        if (TreeHelper.GetValue(node, out var objValue) && objValue is bool boolValue)
         {
             value = boolValue;
             return true;

@@ -501,7 +501,7 @@ internal partial class CodeGenerator
         return false;
     }
 
-    private bool IsVoidExpr(ExpressionSyntax expression)
+    internal static bool IsVoidExpr(ExpressionSyntax expression)
     {
         return expression switch
         {
@@ -516,7 +516,7 @@ internal partial class CodeGenerator
         };
     }
 
-    private bool IsPureExpr(ExpressionSyntax expression)
+    internal static bool IsPureExpr(ExpressionSyntax expression)
     {
         return expression switch
         {
@@ -534,10 +534,28 @@ internal partial class CodeGenerator
         };
     }
 
-    internal bool IsSizeOfConst(UnaryExprOrTypeTraitExpr unaryExprOrTypeTraitExpr)
+    private static bool IsConstExpr(ExpressionSyntax expression)
     {
-        var cSharpType = GetRemappedCSharpType(unaryExprOrTypeTraitExpr, unaryExprOrTypeTraitExpr.TypeOfArgument, out _, false);
+        return expression switch
+        {
+            BinaryExpressionSyntax binaryOperator => IsConstExpr(binaryOperator.Left) && IsConstExpr(binaryOperator.Right),
+            PrefixUnaryExpressionSyntax unaryOperator => IsConstExpr(unaryOperator.Operand),
+            PostfixUnaryExpressionSyntax postfixUnaryExpressionSyntax => IsConstExpr(postfixUnaryExpressionSyntax.Operand),
+            ParenthesizedExpressionSyntax parenExpr => IsConstExpr(parenExpr.Expression),
+            CastExpressionSyntax castExpr => IsConstExpr(castExpr.Expression),
+            MemberAccessExpressionSyntax memberExpr => IsConstExpr(memberExpr.Expression),
+            LiteralExpressionSyntax => true,
+            SizeOfExpressionSyntax sizeOfExpression => IsSizeOfConst(sizeOfExpression.Type),
+            _ => false,
+        };
+    }
 
+    internal bool IsSizeOfConst(UnaryExprOrTypeTraitExpr unaryExprOrTypeTraitExpr) =>
+        IsSizeOfConst(GetRemappedCSharpType(unaryExprOrTypeTraitExpr, unaryExprOrTypeTraitExpr.TypeOfArgument,
+            out _, false));
+
+    internal static bool IsSizeOfConst(TypeSyntax cSharpType)
+    {
         while (true)
         {
             if (cSharpType is ArrayTypeSyntax arrayType)
@@ -566,23 +584,9 @@ internal partial class CodeGenerator
         };
     }
 
-    private static bool? GetConstantCond(Expr expr)
+    private static bool? GetConstantCond(ExpressionSyntax expression)
     {
-        var canonicalType = expr.Type.CanonicalType;
-        if (canonicalType.IsIntegerType && canonicalType.Kind != CXTypeKind.CXType_Bool)
-        {
-            if (expr is UnaryOperator {Opcode: CXUnaryOperatorKind.CXUnaryOperator_LNot, SubExpr: IntegerLiteral nIntegerLiteral})
-            {
-                return nIntegerLiteral.Value == 0;
-            }
-
-            if (expr is IntegerLiteral integerLiteral)
-            {
-                return integerLiteral.Value != 0;
-            }
-        }
-
-        return null;
+        return TreeHelper.GetValue(expression, out var value) ? value as bool? : null;
     }
 
     private string GetCallingConventionName(CXCallingConv callingConvention)

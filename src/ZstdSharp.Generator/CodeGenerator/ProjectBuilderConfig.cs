@@ -18,6 +18,7 @@ internal class ProjectBuilderConfig
     public IReadOnlySet<string> TraversalNames { get; }
     public IReadOnlySet<string> InlineMethods { get; }
     public IReadOnlySet<string> ExcludeFunctionPointers { get; }
+    public IReadOnlySet<string> SourceExcludeNames { get; }
 
     public bool UseFunctionPointers { get; }
 
@@ -41,7 +42,8 @@ internal class ProjectBuilderConfig
         bool convertNestedArraysToMultidimensional = false,
         bool arrayCreateOptimization = true,
         bool useDllExport = true,
-        bool avoidObjectInitializationInStatic = true)
+        bool avoidObjectInitializationInStatic = true,
+        IReadOnlySet<string>? sourceExcludeNames = null)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -62,5 +64,6 @@ internal class ProjectBuilderConfig
         ArrayCreateOptimization = arrayCreateOptimization;
         UseDllExport = useDllExport;
         AvoidObjectInitializationInStatic = avoidObjectInitializationInStatic;
+        SourceExcludeNames = sourceExcludeNames ?? ImmutableHashSet<string>.Empty;
     }
 }

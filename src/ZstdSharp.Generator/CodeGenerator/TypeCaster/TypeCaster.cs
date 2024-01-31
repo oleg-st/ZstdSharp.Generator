@@ -160,20 +160,32 @@ internal class TypeCaster
                 return node;
             }
 
-            // function to function pointer -> &function
-            if (codeGenerator.UseFunctionPointerForType(Target.Name) && Target is FunctionPointerType && node is IdentifierNameSyntax)
+            // function -> (delegate *...)&function, &function -> (delegate*)&function
+            if (codeGenerator.UseFunctionPointerForType(Target.Name) && Target is FunctionPointerType)
             {
-                node = SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression, node);
-                if (codeGenerator.Config.HideFunctionPointers)
+                PrefixUnaryExpressionSyntax? addrOfNode = null;
+                if (node is PrefixUnaryExpressionSyntax prefixUnaryExpressionSyntax &&
+                    prefixUnaryExpressionSyntax.Kind() == SyntaxKind.AddressOfExpression)
                 {
-                    var functionProtoType = codeGenerator.GetFunctionProtoType(expr);
-                    if (functionProtoType != null)
-                    {
-                        var functionPointerType = codeGenerator.GetFunctionPointerType(expr, functionProtoType);
-                        return codeGenerator.CreateCast(expr, functionPointerType, node);
-                    }
+                    addrOfNode = prefixUnaryExpressionSyntax;
+                } else if (node is IdentifierNameSyntax)
+                {
+                    addrOfNode = SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression, node);
                 }
-                return node;
+
+                if (addrOfNode != null)
+                {
+                    if (codeGenerator.Config.HideFunctionPointers)
+                    {
+                        var functionProtoType = codeGenerator.GetFunctionProtoType(expr);
+                        if (functionProtoType != null)
+                        {
+                            var functionPointerType = codeGenerator.GetFunctionPointerType(expr, functionProtoType);
+                            return codeGenerator.CreateCast(expr, functionPointerType, addrOfNode);
+                        }
+                    }
+                    return addrOfNode;
+                }
             }
 
             // function to IntPtr -> function
@@ -677,6 +689,15 @@ internal class TypeCaster
                 if (l is IntegerType {HasValue: true, Value: { }} li)
                 {
                     return li.InheritWithValue(~li.Value.Value);
+                }
+            }
+
+            if (unaryOperator.Opcode == CXUnaryOperatorKind.CXUnaryOperator_AddrOf)
+            {
+                // &function -> function
+                if (unaryOperator.SubExpr.Type is FunctionProtoType)
+                {
+                    return GetExprType(unaryOperator.SubExpr);
                 }
             }
         }

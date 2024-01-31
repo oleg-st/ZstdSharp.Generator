@@ -342,7 +342,7 @@ internal partial class CodeGenerator
         {
             var localDeclarationStatementSyntax = SyntaxFactory.LocalDeclarationStatement(variableDeclarationSyntax);
 
-            if (cSharpType is not PointerTypeSyntax && type.CanonicalType.IsLocalConstQualified && varDecl.HasInit && IsConstExpr(varDecl.Init))
+            if (cSharpType is not PointerTypeSyntax && type.CanonicalType.IsLocalConstQualified && initializer != null && IsConstExpr(initializer))
             {
                 localDeclarationStatementSyntax =
                     localDeclarationStatementSyntax.WithModifiers(
@@ -369,7 +369,7 @@ internal partial class CodeGenerator
 
         if (type.CanonicalType.IsLocalConstQualified || arrayConvertedToPointer)
         {
-            if (varDecl.HasInit && IsConstExpr(varDecl.Init))
+            if (initializer != null && IsConstExpr(initializer))
             {
                 // nuint -> uint
                 fieldDeclarationSyntax = ConvertConstFieldType(fieldDeclarationSyntax, "nuint", "uint", uint.MinValue,
@@ -643,7 +643,7 @@ internal partial class CodeGenerator
                 {
                     if (fieldDecl.IsBitField)
                     {
-                        Report(DiagnosticLevel.Warning, $"Bit fields for structs is not supported {name}.{fieldDecl.Name}");
+                        Report(DiagnosticLevel.Info, $"Bit fields for structs is not supported {name}.{fieldDecl.Name}");
                     }
 
                     var fieldDeclarationSyntax = Visit<FieldDeclarationSyntax>(fieldDecl);
