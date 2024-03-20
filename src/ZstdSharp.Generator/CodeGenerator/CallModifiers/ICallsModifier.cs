@@ -13,4 +13,8 @@ internal interface ICallsModifier
         => Array.Empty<(string, string)>();
 
     string GetDefinitions() => "";
+
+    void Init(ProjectBuilder projectBuilder)
+    {
+    }
 }

@@ -646,7 +646,7 @@ internal partial class CodeGenerator
         return null;
     }
 
-    private SyntaxNode? VisitImplicitCastExpr(ImplicitCastExpr implicitCastExpr)
+    private SyntaxNode VisitImplicitCastExpr(ImplicitCastExpr implicitCastExpr)
     {
         if (implicitCastExpr.CastKind == CX_CastKind.CX_CK_NullToPointer)
         {

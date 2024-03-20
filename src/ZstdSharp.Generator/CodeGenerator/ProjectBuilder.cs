@@ -22,6 +22,7 @@ internal class ProjectBuilder
     private readonly Dictionary<string, FileBuilder> _methodBuilders = new();
     private readonly HashSet<string> _generatedTypes = new();
     private readonly HashSet<string> _generatedInitConstructor = new();
+    private readonly HashSet<IReducer> _reducers = new ();
 
     public ProjectBuilder(ProjectBuilderConfig config, IReporter reporter)
     {
@@ -99,6 +100,11 @@ internal class ProjectBuilder
         return false;
     }
 
+    public void RegisterReducer(IReducer reducer)
+    {
+        _reducers.Add(reducer);
+    }
+
     private async Task BuildFiles()
     {
         Directory.CreateDirectory(Config.UnsafeOutputLocation);
@@ -107,6 +113,10 @@ internal class ProjectBuilder
             await Task.Run(async () =>
             {
                 var compilationUnitSyntax = builder.Build();
+                foreach (var reducer in _reducers)
+                {
+                    compilationUnitSyntax = reducer.Reduce(compilationUnitSyntax);
+                }
 
                 var filename = Path.Combine(Config.UnsafeOutputLocation, $"{builder.Name}.cs");
                 await File.WriteAllTextAsync(filename, compilationUnitSyntax.NormalizeWhitespace().ToFullString());

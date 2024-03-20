@@ -96,6 +96,10 @@ public class Generator
             _callsModifiers.Add(new SynchronizationCalls());
         }
         _projectBuilder = new ProjectBuilder(GetConfig(), reporter);
+        foreach (var callsModifier in _callsModifiers)
+        {
+            callsModifier.Init(_projectBuilder);
+        }
 
         CheckFiles();
     }
