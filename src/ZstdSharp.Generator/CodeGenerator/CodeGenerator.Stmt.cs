@@ -91,10 +91,16 @@ internal partial class CodeGenerator
     {
         var cond = Visit<ExpressionSyntax>(whileStmt.Cond)!;
         var constantCond = GetConstantCond(cond);
-        // while (false)
-        if (constantCond.HasValue && !constantCond.Value)
+        if (constantCond.HasValue)
         {
-            return null;
+            // while (false)
+            if (!constantCond.Value)
+            {
+                return null;
+            }
+
+            // while (true)
+            cond = SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression);
         }
 
         return SyntaxFactory.WhileStatement(cond, VisitStatementSyntax(whileStmt.Body)!);
