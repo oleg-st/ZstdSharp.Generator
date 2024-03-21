@@ -6,7 +6,6 @@ using System.Linq;
 using Microsoft.CodeAnalysis.CSharp;
 using ZstdSharp.Generator.CodeGenerator;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
-using System.Xml.Linq;
 
 // ReSharper disable StringLiteralTypo
 // ReSharper disable CommentTypo

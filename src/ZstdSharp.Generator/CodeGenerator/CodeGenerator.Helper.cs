@@ -64,63 +64,6 @@ internal partial class CodeGenerator
                     FieldsEnumerator()));
     }
 
-    private static T AddBodyToMethodDeclaration<T>(T method, BlockSyntax body) where T : BaseMethodDeclarationSyntax =>
-        body.Statements.Count == 1 && body.Statements[0] is ReturnStatementSyntax returnStatement
-            ? (T) method.WithExpressionBody(SyntaxFactory.ArrowExpressionClause(returnStatement.Expression!))
-                .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-            : (T) method.WithBody(body);
-
-    private static AccessorDeclarationSyntax AddBodyToAccessorDeclaration(AccessorDeclarationSyntax method,
-        BlockSyntax body) =>
-        body.Statements.Count == 1 && body.Statements[0] is ReturnStatementSyntax returnStatement
-            ? method.WithExpressionBody(SyntaxFactory.ArrowExpressionClause(returnStatement.Expression!))
-                .WithSemicolonToken(
-                    SyntaxFactory.Token(SyntaxKind.SemicolonToken))
-            : method.WithBody(body);
-
-    private ExpressionStatementSyntax GetILSizeofStatement(TypeSyntax type) =>
-        SyntaxFactory.ExpressionStatement(
-            type is PointerTypeSyntax
-                ? SyntaxFactory.InvocationExpression(
-                        SyntaxFactory.IdentifierName("Sizeof"))
-                    .WithArgumentList(
-                        SyntaxFactory.ArgumentList(
-                            SyntaxFactory.SingletonSeparatedList(
-                                SyntaxFactory.Argument(
-                                    SyntaxFactory.ObjectCreationExpression(
-                                            SyntaxFactory.IdentifierName("TypeRef"))
-                                        .WithArgumentList(
-                                            SyntaxFactory.ArgumentList(
-                                                SyntaxFactory.SingletonSeparatedList(
-                                                    SyntaxFactory.Argument(
-                                                        SyntaxFactory.TypeOfExpression(type)))))))))
-                : SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.GenericName(
-                            SyntaxFactory.Identifier("Sizeof"))
-                        .WithTypeArgumentList(
-                            SyntaxFactory.TypeArgumentList(
-                                SyntaxFactory.SingletonSeparatedList(type)))));
-
-    private ExpressionSyntax GetReturnPointerExpression(TypeSyntax type) =>
-        type is PointerTypeSyntax
-            ? SyntaxFactory.CastExpression(
-                SyntaxFactory.PointerType(type),
-                SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression,
-                        SyntaxFactory.IdentifierName("IL"),
-                        SyntaxFactory.IdentifierName("ReturnPointer"))))
-            : SyntaxFactory.InvocationExpression(
-                    SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression,
-                        SyntaxFactory.IdentifierName("IL"),
-                        SyntaxFactory.GenericName(
-                                SyntaxFactory.Identifier("ReturnPointer"))
-                            .WithTypeArgumentList(
-                                SyntaxFactory.TypeArgumentList(
-                                    SyntaxFactory.SingletonSeparatedList(type)))));
-
     private TypeSyntax GetCSharpTypeForPointeeType(Cursor cursor, Type pointeeType)
     {
         if (pointeeType is AttributedType attributedType)
