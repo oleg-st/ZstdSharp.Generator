@@ -33,13 +33,13 @@ internal partial class CodeGenerator
                     ))
             });
 
-    private BaseTypeDeclarationSyntax CreateFixedBuffer(string name, TypeSyntax type, int size)
+    private IEnumerable<StructDeclarationSyntax> CreateFixedBuffer(string name, TypeSyntax type, int size)
     {
         var fixedBufferName = GetArtificialFixedSizedBufferName(name);
 
-        IEnumerable<MemberDeclarationSyntax> FieldsEnumerator()
+        IEnumerable<MemberDeclarationSyntax> FieldsEnumerator(int count)
         {
-            for (var i = 0; i < size; i++)
+            for (var i = 0; i < count; i++)
             {
                 yield return SyntaxFactory.FieldDeclaration(
                         SyntaxFactory.VariableDeclaration(
@@ -54,14 +54,51 @@ internal partial class CodeGenerator
             }
         }
 
-        var inlineAttributes = GetInlineAttributes();
-        return SyntaxFactory.StructDeclaration(fixedBufferName)
+        var structDeclaration = SyntaxFactory.StructDeclaration(fixedBufferName)
             .WithModifiers(
                 SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
                     SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)))
             .WithMembers(
                 SyntaxFactory.List(
-                    FieldsEnumerator()));
+                    FieldsEnumerator(size)));
+
+        if (CanUseInlineArray(size))
+        {
+            AddUsing("System.Runtime.CompilerServices");
+
+            yield return structDeclaration
+                .WithMembers(SyntaxFactory.List(FieldsEnumerator(1)))
+                .WithAttributeLists(
+                    SyntaxFactory.SingletonList(
+                        SyntaxFactory.AttributeList(
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.Attribute(
+                                        SyntaxFactory.IdentifierName("InlineArray"))
+                                    .WithArgumentList(
+                                        SyntaxFactory.AttributeArgumentList(
+                                            SyntaxFactory.SingletonSeparatedList(
+                                                SyntaxFactory.AttributeArgument(
+                                                    SyntaxFactory.LiteralExpression(
+                                                        SyntaxKind.NumericLiteralExpression,
+                                                        SyntaxFactory.Literal(size))))))))))
+                .WithLeadingTrivia(SyntaxFactory.Trivia(
+                    SyntaxFactory.IfDirectiveTrivia(
+                        SyntaxFactory.IdentifierName("NET8_0_OR_GREATER"),
+                        true,
+                        false,
+                        false)));
+
+            yield return structDeclaration
+                .WithLeadingTrivia(SyntaxFactory.Trivia(
+                    SyntaxFactory.ElseDirectiveTrivia(false, false)))
+                .WithTrailingTrivia(SyntaxFactory.Trivia(
+                    SyntaxFactory.EndIfDirectiveTrivia(
+                        true)));
+        }
+        else
+        {
+            yield return structDeclaration;
+        }
     }
 
     private TypeSyntax GetCSharpTypeForPointeeType(Cursor cursor, Type pointeeType)
@@ -710,7 +747,7 @@ internal partial class CodeGenerator
                                                                           or "uint" or "long" or "ulong" or "double"
                                                                           or "float";
 
-    internal bool IsArtificialFixedBufferAccess(Expr expr, [MaybeNullWhen(false)] out Expr subExpression)
+    internal bool IsArtificialFixedBufferAccess(Expr expr, [MaybeNullWhen(false)] out Expr subExpression, out long size)
     {
         if (expr is ImplicitCastExpr implicitCastExpr)
         {
@@ -719,12 +756,13 @@ internal partial class CodeGenerator
             {
                 var type = memberExpr.Type;
                 var cSharpType = GetRemappedCSharpType(memberExpr, type, out _);
-                if (type.CanonicalType is ConstantArrayType)
+                if (type.CanonicalType is ConstantArrayType constantArray)
                 {
                     var elementTypeSyntax = GetElementType(cSharpType, out _)!;
                     if (!IsSupportedFixedSizedBufferType(elementTypeSyntax.ToString()))
                     {
                         subExpression = implicitCastExpr.SubExpr;
+                        size = constantArray.Size;
                         return true;
                     }
                 }
@@ -732,6 +770,7 @@ internal partial class CodeGenerator
         }
 
         subExpression = default;
+        size = default;
         return false;
     }
 

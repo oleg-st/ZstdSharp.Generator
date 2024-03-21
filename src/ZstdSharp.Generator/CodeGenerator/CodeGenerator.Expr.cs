@@ -324,21 +324,24 @@ internal partial class CodeGenerator
         }
     }
 
+    // small arrays can use e0..e7 index access
+    private bool CanUseInlineArray(long size) => size > 8;
+
     private SyntaxNode VisitArraySubscriptExpr(ArraySubscriptExpr arraySubscriptExpr)
     {
         (Expr baseExpr, Expr idxExpr) = ExtractArraySubscriptExpr(arraySubscriptExpr);
         var baseExpression = Visit<ExpressionSyntax>(baseExpr)!;
         // s->f[1] -> s->f.e1
-        if (IsArtificialFixedBufferAccess(baseExpr, out var subExpression))
+        if (IsArtificialFixedBufferAccess(baseExpr, out var subExpression, out var size))
         {
             var evalResult = idxExpr.Handle.Evaluate;
             if (evalResult.Kind == CXEvalResultKind.CXEval_Int)
             {
-                var signedValue = evalResult.AsLongLong;
-                if (signedValue >= 0)
+                var index = evalResult.AsLongLong;
+                if (index == 0 || (index > 0 && !CanUseInlineArray(size)))
                 {
                     return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, Visit<ExpressionSyntax>(subExpression)!,
-                                SyntaxFactory.IdentifierName($"e{signedValue}"));
+                                SyntaxFactory.IdentifierName($"e{index}"));
                 }
             }
         }
@@ -655,7 +658,7 @@ internal partial class CodeGenerator
 
         var subExpression = Visit<ExpressionSyntax>(implicitCastExpr.SubExpr)!;
         // ArtificialFixedBuffer access: s->f1 -> (&s->f1.e0)
-        if (IsArtificialFixedBufferAccess(implicitCastExpr, out _))
+        if (IsArtificialFixedBufferAccess(implicitCastExpr, out _, out _))
         {
             subExpression = SyntaxFactory.ParenthesizedExpression(
                 SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,

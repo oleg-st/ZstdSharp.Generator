@@ -50,10 +50,6 @@ internal partial class CodeGenerator
         var escapedName = EscapeName(name);
         // todo
         var elementTypeName = GetCSharpType(cursor, constantArrayType.ElementType, out _).ToString();
-        var structDeclarationSyntax = SyntaxFactory.StructDeclaration(escapedName)
-            .WithModifiers(
-                SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
-                    SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
 
         var elementType = GetType(elementTypeName);
         if (IsSupportedFixedSizedBufferType(elementTypeName))
@@ -75,27 +71,19 @@ internal partial class CodeGenerator
                     SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
                         SyntaxFactory.Token(SyntaxKind.FixedKeyword)));
 
-            structDeclarationSyntax = structDeclarationSyntax.AddMembers(fieldDeclarationSyntax);
+            AddMember(SyntaxFactory.StructDeclaration(escapedName)
+                .WithModifiers(
+                    SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword),
+                        SyntaxFactory.Token(SyntaxKind.UnsafeKeyword))).AddMembers(fieldDeclarationSyntax));
         }
         else
         {
-            var totalSize = Math.Max(constantArrayType.Size, 1);
-
-            for (long i = 0; i < totalSize; i++)
+            foreach (var member in CreateFixedBuffer(escapedName, elementType,
+                         (int) Math.Max(constantArrayType.Size, 1)))
             {
-                var fieldDeclarationSyntax = SyntaxFactory.FieldDeclaration(
-                    SyntaxFactory.VariableDeclaration(
-                            elementType)
-                        .WithVariables(
-                            SyntaxFactory.SingletonSeparatedList(
-                                SyntaxFactory.VariableDeclarator(
-                                    SyntaxFactory.Identifier($"e{i}")))));
-
-                structDeclarationSyntax = structDeclarationSyntax.AddMembers(fieldDeclarationSyntax);
+                AddMember(member);
             }
         }
-
-        AddMember(structDeclarationSyntax);
 
         StopFile();
     }

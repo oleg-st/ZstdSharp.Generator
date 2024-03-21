@@ -940,7 +940,10 @@ internal partial class CodeGenerator
                     )
                     .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(accessSpecifier)));
 
-                AddMemberToConsumer(CreateFixedBuffer(name, elementTypeSyntax, (int) constantArrayType.Size));
+                foreach (var member in CreateFixedBuffer(name, elementTypeSyntax, (int) constantArrayType.Size))
+                {
+                    AddMemberToConsumer(member);
+                }
             }
         }
 
