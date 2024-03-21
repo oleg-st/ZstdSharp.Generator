@@ -197,7 +197,7 @@ internal class ProjectModifier
         return method;
     }
 
-    private static MethodDeclarationSyntax AddSkipInit(MethodDeclarationSyntax method, string varName)
+    internal static MethodDeclarationSyntax AddSkipInit(MethodDeclarationSyntax method, string varName)
     {
         foreach (var node in method.DescendantNodes())
         {

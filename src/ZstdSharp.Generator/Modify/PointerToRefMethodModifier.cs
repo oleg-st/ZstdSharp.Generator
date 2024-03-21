@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -67,6 +68,19 @@ internal class PointerToRefMethodModifier : CSharpSyntaxRewriter
         return base.VisitMemberAccessExpression(node);
     }
 
+    public override SyntaxNode? VisitArgument(ArgumentSyntax node)
+    {
+        // X(arg) -> X(ref arg)
+        var innerExpression = TreeHelper.GetInnerExpression(node.Expression);
+        if (innerExpression is IdentifierNameSyntax identifierName &&
+            _names.Contains(identifierName.Identifier.ToString()))
+        {
+            return node.WithExpression(SyntaxFactory.RefExpression(SyntaxFactory.Token(SyntaxKind.RefKeyword), node.Expression));
+        }
+
+        return base.VisitArgument(node);
+    }
+
     public override SyntaxNode? VisitIdentifierName(IdentifierNameSyntax node)
     {
         if (_names.Contains(node.Identifier.ToString()))
@@ -75,5 +89,11 @@ internal class PointerToRefMethodModifier : CSharpSyntaxRewriter
         }
 
         return base.VisitIdentifierName(node);
+    }
+
+    [return: NotNullIfNotNull("method")]
+    public MethodDeclarationSyntax? Run(MethodDeclarationSyntax? method)
+    {
+        return Visit(method) as MethodDeclarationSyntax;
     }
 }
