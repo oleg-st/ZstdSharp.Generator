@@ -394,7 +394,10 @@ internal partial class CodeGenerator
             var name = $"stringToByte_{BitConverter.ToString(bytes).Replace("-", "_")}";
             if (_projectBuilder.AddGeneratedType(name))
             {
-                AddMethodsMember(CreateByteArrayField(name, bytes));
+                AddMethodsMember(CreateArrayField(name, GetType("byte"), bytes.Select(x =>
+                    SyntaxFactory.LiteralExpression(
+                        SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal(x)))));
             }
 
             castExpressionSyntax = SyntaxFactory.CastExpression(type, SyntaxFactory.IdentifierName(name));
@@ -421,20 +424,52 @@ internal partial class CodeGenerator
         var kind = GetUnaryKind(unaryOperator.Opcode);
         if (kind != null)
         {
+            var subExpression = Visit<ExpressionSyntax>(unaryOperator.SubExpr);
             if (unaryOperator.IsPostfix)
             {
                 return SyntaxFactory.PostfixUnaryExpression((SyntaxKind) kind,
-                    Visit<ExpressionSyntax>(unaryOperator.SubExpr)!);
+                    subExpression!);
             }
 
             if (kind == SyntaxKind.AddressOfExpression)
             {
                 var cSharpType = GetRemappedCSharpType(unaryOperator.SubExpr, unaryOperator.SubExpr.Type, out var arrayConvertedToPointer);
 
+                // pointer to static local var
+                if (unaryOperator.SubExpr is DeclRefExpr {Decl: VarDecl {StorageClass: CX_StorageClass.CX_SC_Static, HasInit: true} varDecl})
+                {
+                    var initExpression = Visit<ExpressionSyntax>(varDecl.Init)!;
+
+                    var name = $"static_{varDecl.Name}";
+                    var pointerType = cSharpType;
+                    if (_projectBuilder.AddGeneratedType(name))
+                    {
+                        IEnumerable<ExpressionSyntax> values = new[] { initExpression };
+                        if (TreeHelper.GetValue(initExpression, out var value) && value is 0 &&
+                            cSharpType.ToString() is "nuint" or "nint")
+                        {
+                            // extend zero to 64 bits (8 bytes) to use array optimization
+                            cSharpType = GetType("byte");
+                            values = Enumerable.Repeat(initExpression, 8);
+                        }
+
+                        AddMethodsMember(CreateArrayField(name, cSharpType, values, pointerType));
+                    }
+
+                    // &x -> &static_x[0]
+                    return SyntaxFactory.PrefixUnaryExpression((SyntaxKind) kind, SyntaxFactory.ElementAccessExpression(
+                        SyntaxFactory.IdentifierName(name),
+                        SyntaxFactory.BracketedArgumentList(
+                            SyntaxFactory.SingletonSeparatedList(
+                                SyntaxFactory.Argument(
+                                    SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression,
+                                        SyntaxFactory.Literal(0)))))));
+                }
+
                 // dereference
                 if (IsStructToClass(cSharpType.ToString()))
                 {
-                    return Visit<ExpressionSyntax>(unaryOperator.SubExpr);
+                    return subExpression;
                 }
 
                 // &array -> &array[0]
@@ -453,7 +488,7 @@ internal partial class CodeGenerator
                     {
                         return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,
                             SyntaxFactory.ElementAccessExpression(
-                                Visit<ExpressionSyntax>(unaryOperator.SubExpr)!,
+                                subExpression!,
                                 SyntaxFactory.BracketedArgumentList(
                                     SyntaxFactory.SingletonSeparatedList(
                                         SyntaxFactory.Argument(SyntaxFactory.LiteralExpression(
@@ -464,7 +499,7 @@ internal partial class CodeGenerator
             }
 
             return SyntaxFactory.PrefixUnaryExpression((SyntaxKind) kind,
-                Visit<ExpressionSyntax>(unaryOperator.SubExpr)!);
+                subExpression!);
         }
 
         Report(DiagnosticLevel.Error, $"Unknown kind {unaryOperator.Opcode} {unaryOperator.OpcodeStr}");
@@ -629,6 +664,63 @@ internal partial class CodeGenerator
                 }
             }
 
+            if (binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_LAnd)
+            {
+                var leftValue = TreeHelper.GetValueOfType<bool>(left);
+                var rightValue = TreeHelper.GetValueOfType<bool>(right);
+                if (leftValue != null)
+                {
+                    // true && x -> x
+                    if (leftValue.Value)
+                    {
+                        return right;
+                    }
+
+                    // false && x -> false
+                    return SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression);
+                }
+
+                if (rightValue != null)
+                {
+                    // x && true -> x
+                    if (rightValue.Value)
+                    {
+                        return left;
+                    }
+
+                    // x && false -> false
+                    return SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression);
+                }
+            }
+
+            if (binaryOperator.Opcode == CXBinaryOperatorKind.CXBinaryOperator_LOr)
+            {
+                var leftValue = TreeHelper.GetValueOfType<bool>(left);
+                var rightValue = TreeHelper.GetValueOfType<bool>(right);
+                if (leftValue != null)
+                {
+                    // true || x -> true
+                    if (leftValue.Value)
+                    {
+                        return SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression);
+                    }
+
+                    // false || x -> x
+                    return right;
+                }
+
+                if (rightValue != null)
+                {
+                    // x || true -> true
+                    if (rightValue.Value)
+                    {
+                        return SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression);
+                    }
+
+                    // x || false -> x
+                    return left;
+                }
+            }
             return expressionSyntax;
         }
 

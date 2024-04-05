@@ -521,6 +521,11 @@ internal partial class CodeGenerator
         }
 
         var initializer = fieldDeclarationSyntax.Declaration.Variables[0].Initializer?.Value;
+        if (initializer is CastExpressionSyntax castExpression)
+        {
+            initializer = castExpression.Expression;
+        }
+
         if (!(initializer is InvocationExpressionSyntax
               {
                   Expression: IdentifierNameSyntax identifierName
@@ -534,8 +539,9 @@ internal partial class CodeGenerator
             return fieldDeclarationSyntax;
         }
 
+        var arrayElementType = arrayPointerInitializer.Type.ElementType;
         var identifier = fieldDeclarationSyntax.Declaration.Variables[0].Identifier;
-        var directiveName = Net7SpanArrayCreation(pointerType.ElementType)
+        var directiveName = Net7SpanArrayCreation(arrayElementType)
                 ? "NET7_0_OR_GREATER"
                 : "NET8_0_OR_GREATER";
         AddUsing("System");
@@ -547,7 +553,7 @@ internal partial class CodeGenerator
                         SyntaxFactory.Identifier("ReadOnlySpan"))
                     .WithTypeArgumentList(
                         SyntaxFactory.TypeArgumentList(
-                            SyntaxFactory.SingletonSeparatedList(pointerType.ElementType))),
+                            SyntaxFactory.SingletonSeparatedList(arrayElementType))),
                 SyntaxFactory.Identifier(spanPropertyName))
             .WithModifiers(new SyntaxTokenList(SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
                 SyntaxFactory.Token(SyntaxKind.StaticKeyword)))
@@ -597,57 +603,52 @@ internal partial class CodeGenerator
                 false)));
     }
 
-    private FieldDeclarationSyntax CreateByteArrayField(string name, byte[] data)
+    private FieldDeclarationSyntax CreateArrayField(string name, TypeSyntax type, IEnumerable<ExpressionSyntax> values,
+        TypeSyntax? pointerType = null)
     {
+        pointerType ??= type;
+        ExpressionSyntax initializer = SyntaxFactory.InvocationExpression(
+                SyntaxFactory.IdentifierName("GetArrayPointer"))
+            .WithArgumentList(
+                SyntaxFactory.ArgumentList(
+                    SyntaxFactory.SingletonSeparatedList(
+                        SyntaxFactory.Argument(
+                            SyntaxFactory.ArrayCreationExpression(
+                                    SyntaxFactory.ArrayType(type)
+                                        .WithRankSpecifiers(
+                                            SyntaxFactory.SingletonList(
+                                                SyntaxFactory.ArrayRankSpecifier(
+                                                    SyntaxFactory
+                                                        .SingletonSeparatedList<
+                                                            ExpressionSyntax>(
+                                                            SyntaxFactory
+                                                                .OmittedArraySizeExpression())))))
+                                .WithInitializer(
+                                    SyntaxFactory.InitializerExpression(
+                                        SyntaxKind.ArrayInitializerExpression,
+                                        SyntaxFactory.SeparatedList(values)))))));
+        if (pointerType != type)
+        {
+            initializer = SyntaxFactory.CastExpression(SyntaxFactory.PointerType(pointerType), initializer);
+        }
+
         var fieldDeclarationSyntax = SyntaxFactory.FieldDeclaration(
-                SyntaxFactory.VariableDeclaration(
-                        SyntaxFactory.PointerType(
-                            SyntaxFactory.PredefinedType(
-                                SyntaxFactory.Token(SyntaxKind.ByteKeyword)))
-                    )
+                SyntaxFactory.VariableDeclaration(SyntaxFactory.PointerType(pointerType))
                     .WithVariables(
                         SyntaxFactory.SingletonSeparatedList(
                             SyntaxFactory.VariableDeclarator(
                                     SyntaxFactory.Identifier(name))
-                                .WithInitializer(
-                                    SyntaxFactory.EqualsValueClause(
-                                        SyntaxFactory.InvocationExpression(
-                                                SyntaxFactory.IdentifierName("GetArrayPointer"))
-                                            .WithArgumentList(
-                                                SyntaxFactory.ArgumentList(
-                                                    SyntaxFactory.SingletonSeparatedList(
-                                                        SyntaxFactory.Argument(
-                                                            SyntaxFactory.ArrayCreationExpression(
-                                                                    SyntaxFactory.ArrayType(
-                                                                            SyntaxFactory.PredefinedType(
-                                                                                SyntaxFactory.Token(SyntaxKind
-                                                                                    .ByteKeyword)))
-                                                                        .WithRankSpecifiers(
-                                                                            SyntaxFactory.SingletonList(
-                                                                                SyntaxFactory.ArrayRankSpecifier(
-                                                                                    SyntaxFactory
-                                                                                        .SingletonSeparatedList<
-                                                                                            ExpressionSyntax>(
-                                                                                            SyntaxFactory
-                                                                                                .OmittedArraySizeExpression())))))
-                                                                .WithInitializer(
-                                                                    SyntaxFactory.InitializerExpression(
-                                                                        SyntaxKind.ArrayInitializerExpression,
-                                                                        SyntaxFactory.SeparatedList<ExpressionSyntax>(
-                                                                            data.Select(x =>
-                                                                                SyntaxFactory.LiteralExpression(
-                                                                                    SyntaxKind.NumericLiteralExpression,
-                                                                                    SyntaxFactory
-                                                                                        .Literal(x)))))))))))))))
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(initializer)))))
             .WithModifiers(
                 SyntaxFactory.TokenList(
                     SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
                     SyntaxFactory.Token(SyntaxKind.StaticKeyword),
                     SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)));
-        if (Config.ArrayCreateOptimization)
+        if (Config.ArrayCreateOptimization && Net8SpanArrayCreation(type))
         {
             fieldDeclarationSyntax = CreateArrayOptimization(fieldDeclarationSyntax);
         }
+
         return fieldDeclarationSyntax;
     }
 

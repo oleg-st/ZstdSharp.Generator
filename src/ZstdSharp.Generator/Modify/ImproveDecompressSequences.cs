@@ -36,6 +36,7 @@ internal class ImproveDecompressSequences
             new (_projectBuilder, "BIT_readBitsFast", new HashSet<string> { "bitD" }),
             new (_projectBuilder, "BIT_reloadDStreamFast", new HashSet<string> { "bitD" }),
             new (_projectBuilder, "BIT_reloadDStream", new HashSet<string> { "bitD" }),
+            new (_projectBuilder, "BIT_reloadDStream_internal", new HashSet<string> { "bitD" }),
             // decompress
             new (_projectBuilder, "ZSTD_initFseState", new HashSet<string> { "DStatePtr", "bitD" }),
             new (_projectBuilder, "ZSTD_updateFseStateWithDInfo", new HashSet<string> { "DStatePtr", "bitD" }),
@@ -45,8 +46,8 @@ internal class ImproveDecompressSequences
 
     private record RefMethodInfo
     {
-        public readonly MethodDeclarationSyntax Method;
-        public readonly FileBuilder Builder;
+        public readonly MethodDeclarationSyntax? Method;
+        public readonly FileBuilder? Builder;
         public readonly string MethodName;
         public readonly IReadOnlySet<string> Parameters;
         public readonly IReadOnlySet<int> ParameterIndexes;
@@ -55,26 +56,27 @@ internal class ImproveDecompressSequences
         {
             MethodName = methodName;
             Parameters = parameters;
-            if (!projectBuilder.TryGetMethod(methodName, out var builder, out var method))
+            if (projectBuilder.TryGetMethod(methodName, out Builder, out Method))
             {
-                throw new Exception($"Not found method {methodName}");
+                ParameterIndexes = parameters
+                    .Select(name => Method.ParameterList.Parameters.IndexOf(p => name == p.Identifier.ToString()))
+                    .ToImmutableHashSet();
             }
-            Builder = builder;
-            Method = method;
-
-            ParameterIndexes = parameters
-                .Select(name => Method.ParameterList.Parameters.IndexOf(p => name == p.Identifier.ToString()))
-                .ToImmutableHashSet();
+            else
+            {
+                ParameterIndexes = ImmutableHashSet<int>.Empty;
+            }
         }
     }
 
     private class MethodInline : CSharpSyntaxRewriter
     {
-        protected record ArgToVariableInfo(string TargetName, TypeSyntax Type, bool Dereference = false)
+        protected record ArgToVariableInfo(string? TargetName, TypeSyntax Type, ExpressionSyntax Expression, bool Dereference = false)
         {
-            public readonly string TargetName = TargetName;
+            public readonly string? TargetName = TargetName;
             public readonly TypeSyntax Type = Type;
             public readonly bool Dereference = Dereference;
+            public readonly ExpressionSyntax Expression = Expression;
         }
 
         protected readonly MethodDeclarationSyntax Method;
@@ -98,16 +100,20 @@ internal class ImproveDecompressSequences
                 {
                     case IdentifierNameSyntax identifierName:
                         ArgToVariables.Add(p.Identifier.ToString(),
-                            new ArgToVariableInfo(identifierName.ToString(), type));
+                            new ArgToVariableInfo(identifierName.ToString(), type, argument.Expression));
                         break;
                     case PrefixUnaryExpressionSyntax prefixUnaryExpression when
                         prefixUnaryExpression.Kind() == SyntaxKind.AddressOfExpression &&
                         prefixUnaryExpression.Operand is IdentifierNameSyntax identifierName2:
+                        var dereference = p.Modifiers.All(m => m.ToString() != "ref");
                         ArgToVariables.Add(p.Identifier.ToString(),
-                            new ArgToVariableInfo(identifierName2.ToString(), type, Dereference: p.Modifiers.All(m => m.ToString() != "ref")));
+                            new ArgToVariableInfo(identifierName2.ToString(), type,
+                                dereference ? argument.Expression : identifierName2,
+                                Dereference: dereference));
                         break;
                     default:
-                        reporter.Report(DiagnosticLevel.Error, $"Unknown argument kind {argument}");
+                        ArgToVariables.Add(p.Identifier.ToString(),
+                            new ArgToVariableInfo(null, type, argument.Expression));
                         break;
                 }
             }
@@ -123,7 +129,7 @@ internal class ImproveDecompressSequences
                 if (ArgToVariables.TryGetValue(name, out var argToVariable) && argToVariable.TargetName == name)
                 {
                     var newName = identifierName + "Inner";
-                    ArgToVariables[name] = new ArgToVariableInfo(newName, argToVariable.Type);
+                    ArgToVariables[name] = new ArgToVariableInfo(newName, argToVariable.Type, SyntaxFactory.IdentifierName(newName));
 
                     return SyntaxFactory.LocalDeclarationStatement(
                         SyntaxFactory.VariableDeclaration(argToVariable.Type,
@@ -141,13 +147,7 @@ internal class ImproveDecompressSequences
             // replace usage of parameter to argument
             if (ArgToVariables.TryGetValue(node.Identifier.ToString(), out var argToVariableInfo))
             {
-                if (argToVariableInfo.Dereference)
-                {
-                    return SyntaxFactory.PrefixUnaryExpression(SyntaxKind.AddressOfExpression,
-                        SyntaxFactory.IdentifierName(argToVariableInfo.TargetName));
-                }
-
-                return SyntaxFactory.IdentifierName(argToVariableInfo.TargetName);
+                return argToVariableInfo.Expression;
             }
 
             return base.VisitIdentifierName(node);
@@ -162,7 +162,7 @@ internal class ImproveDecompressSequences
                 if (innerExpression is IdentifierNameSyntax identifierName &&
                     ArgToVariables.TryGetValue(identifierName.Identifier.ToString(), out var toName) && toName.Dereference)
                 {
-                    return SyntaxFactory.IdentifierName(toName.TargetName);
+                    return SyntaxFactory.IdentifierName(toName.TargetName!);
                 }
             }
 
@@ -200,7 +200,7 @@ internal class ImproveDecompressSequences
                 if (variable.Identifier.ToString() == _returnVariableName)
                 {
                     ArgToVariables[_returnVariableName] =
-                        new ArgToVariableInfo(Variable.Identifier.ToString(), variableDeclaration.Type);
+                        new ArgToVariableInfo(Variable.Identifier.ToString(), variableDeclaration.Type, SyntaxFactory.IdentifierName(Variable.Identifier));
 
                     return SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(
                         SyntaxKind.SimpleAssignmentExpression,
@@ -472,7 +472,7 @@ internal class ImproveDecompressSequences
             _inlineDecodeSequence = inlineDecodeSequence;
         }
 
-        private bool ExtractMethodInvocation(LocalDeclarationStatementSyntax node, string name, int count,
+        private bool ExtractMethodInvocation(LocalDeclarationStatementSyntax node, string name, IReadOnlySet<int> counts,
             [NotNullWhen(true)] out MethodDeclarationSyntax? method,
             [NotNullWhen(true)] out InvocationExpressionSyntax? invocationExpression,
             [NotNullWhen(true)] out VariableDeclarationSyntax? variableDeclaration,
@@ -507,10 +507,10 @@ internal class ImproveDecompressSequences
                 return false;
             }
 
-            if (invocationExpressionValue.ArgumentList.Arguments.Count != count)
+            if (!counts.Contains(invocationExpressionValue.ArgumentList.Arguments.Count))
             {
                 _reporter.Report(DiagnosticLevel.Error,
-                    $"Invalid arguments count for {name}, expected {count}, got {invocationExpressionValue.ArgumentList.Arguments.Count}");
+                    $"Invalid arguments count for {name}, expected {string.Join(" or ", counts.Select(x => x.ToString()))} got {invocationExpressionValue.ArgumentList.Arguments.Count}");
                 return false;
             }
 
@@ -529,7 +529,7 @@ internal class ImproveDecompressSequences
         public override SyntaxNode? VisitLocalDeclarationStatement(LocalDeclarationStatementSyntax node)
         {
             // nuint oneSeqSize = ZSTD_execSequence(op, oend, sequence, &litPtr, litEnd, prefixStart, vBase, dictEnd);
-            if (ExtractMethodInvocation(node, ZstdExecSequence, 8, out var execMethod, out var execInvocationExpression,
+            if (ExtractMethodInvocation(node, ZstdExecSequence, new HashSet<int> { 8 }, out var execMethod, out var execInvocationExpression,
                     out var execVariableDeclaration, out var execVariable))
             {
                 // nuint oneSeqSize; {inlined ZSTD_execSequence}
@@ -546,7 +546,7 @@ internal class ImproveDecompressSequences
                 });
             }
 
-            if (_inlineDecodeSequence && ExtractMethodInvocation(node, ZstdDecodeSequence, 2, out var decodeMethod,
+            if (_inlineDecodeSequence && ExtractMethodInvocation(node, ZstdDecodeSequence, new HashSet<int> { 2, 3 }, out var decodeMethod,
                     out var decodeInvocationExpression,
                     out _, out var decodeVariable))
             {
@@ -641,10 +641,17 @@ internal class ImproveDecompressSequences
          */
         foreach (var refMethod in _refMethods)
         {
-            refMethod.Builder.AddMethodWithName(
-                new PointerToRefMethodModifier(_reporter, refMethod.Parameters)
-                    .Run(refMethod.Method),
-                refMethod.MethodName + "_ref");
+            if (refMethod.Method != null)
+            {
+                refMethod.Builder!.AddMethodWithName(
+                    new PointerToRefMethodModifier(_reporter, refMethod.Parameters)
+                        .Run(refMethod.Method),
+                    refMethod.MethodName + "_ref");
+            }
+            else
+            {
+                _reporter.Report(DiagnosticLevel.Warning, $"Method {refMethod.MethodName} is not found");
+            }
         }
 
         // call ref versions in ZSTD_execSequence

@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using System.Security.Cryptography.Pkcs;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -19,6 +20,9 @@ internal static class TreeHelper
 
         return expressionSyntax;
     }
+
+    public static T? GetValueOfType<T>(SyntaxNode node) where T : struct => 
+        GetValue(node, out var v) && v is T typeValue ? typeValue : null;
 
     public static bool GetValue(SyntaxNode node, out object? value)
     {
@@ -89,7 +93,33 @@ internal static class TreeHelper
                     case SyntaxKind.NotEqualsExpression:
                         value = leftIntValue != rightIntValue;
                         return true;
-                        // todo other
+                    // todo other
+                }
+            }
+
+            if (leftValue is bool leftBoolValue && rightValue is bool rightBoolValue)
+            {
+                switch (binaryExpression.Kind())
+                {
+                    case SyntaxKind.LogicalAndExpression:
+                        value = leftBoolValue && rightBoolValue;
+                        return true;
+                    case SyntaxKind.LogicalOrExpression:
+                        value = leftBoolValue || rightBoolValue;
+                        return true;
+                }
+            }
+        }
+
+        if (node is PrefixUnaryExpressionSyntax prefixUnaryExpression &&
+            GetValue(prefixUnaryExpression.Operand, out var opValue))
+        {
+            if (opValue is bool opBoolValue)
+            {
+                switch (prefixUnaryExpression.Kind())
+                {
+                    case SyntaxKind.LogicalNotExpression:
+                        return !opBoolValue;
                 }
             }
         }

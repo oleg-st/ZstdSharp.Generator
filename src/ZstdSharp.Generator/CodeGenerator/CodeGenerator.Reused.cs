@@ -572,11 +572,6 @@ internal partial class CodeGenerator
         };
     }
 
-    private static bool? GetConstantCond(ExpressionSyntax expression)
-    {
-        return TreeHelper.GetValue(expression, out var value) ? value as bool? : null;
-    }
-
     private string GetCallingConventionName(CXCallingConv callingConvention)
     {
         switch (callingConvention)

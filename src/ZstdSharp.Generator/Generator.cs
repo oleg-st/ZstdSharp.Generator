@@ -299,7 +299,9 @@ public class Generator
             // remove internal helper
             { "_FORCE_HAS_FORMAT_STRING", "_FORCE_HAS_FORMAT_STRING(...) {}" },
             // branchless in .NET 8
-            { "BOUNDED", "BOUNDED(min,val,max) ((val) <= (min) ? (min) : ((val) <= (max) ? (val) : (max)))"}
+            { "BOUNDED", "BOUNDED(min,val,max) ((val) <= (min) ? (min) : ((val) <= (max) ? (val) : (max)))"},
+            // XXH_ASSUME - remove
+            { "XXH_ASSUME", "XXH_ASSUME(c)"},
         };
 
         foreach (var callsModifier in _callsModifiers)

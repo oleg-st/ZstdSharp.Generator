@@ -56,7 +56,7 @@ internal partial class CodeGenerator
     {
         // do { ... } while (false) => ...
         var cond = Visit<ExpressionSyntax>(doStmt.Cond)!;
-        var constantCond = GetConstantCond(cond);
+        var constantCond = TreeHelper.GetValueOfType<bool>(cond);
         if (constantCond.HasValue && !constantCond.Value)
         {
             return Visit<StatementSyntax>(doStmt.Body);
@@ -90,7 +90,7 @@ internal partial class CodeGenerator
     private SyntaxNode? VisitWhileStmt(WhileStmt whileStmt)
     {
         var cond = Visit<ExpressionSyntax>(whileStmt.Cond)!;
-        var constantCond = GetConstantCond(cond);
+        var constantCond = TreeHelper.GetValueOfType<bool>(cond);
         if (constantCond.HasValue)
         {
             // while (false)
@@ -356,7 +356,7 @@ internal partial class CodeGenerator
             return null;
         }
 
-        var constantCond = GetConstantCond(ifCond);
+        var constantCond = TreeHelper.GetValueOfType<bool>(ifCond);
         // if (true) -> then / if (false) -> else
         if (constantCond.HasValue)
         {
