@@ -57,14 +57,19 @@ internal partial class CodeGenerator
         // do { ... } while (false) => ...
         var cond = Visit<ExpressionSyntax>(doStmt.Cond)!;
         var constantCond = TreeHelper.GetValueOfType<bool>(cond);
+        var body = Visit<StatementSyntax>(doStmt.Body);
         if (constantCond.HasValue && !constantCond.Value)
         {
-            return Visit<StatementSyntax>(doStmt.Body);
+            // fold block
+            if (body is BlockSyntax {Statements.Count: 1} blockSyntax)
+            {
+                return blockSyntax.Statements.First();
+            }
+
+            return body;
         }
 
-        return SyntaxFactory.DoStatement(
-            VisitStatementSyntax(doStmt.Body)!,
-            cond);
+        return SyntaxFactory.DoStatement(body!, cond);
     }
 
     private SyntaxNode VisitLabelStmt(LabelStmt labelStmt)
