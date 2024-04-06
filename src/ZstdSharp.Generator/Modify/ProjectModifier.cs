@@ -235,6 +235,214 @@ internal class ProjectModifier
         }
     }
 
+    private void ModifyVectorCode()
+    {
+        /* SSE2 is available for .NET Core 3+, ARM for .NET 5/9+, software implementation otherwise */
+        ModifyMethod("ZSTD_row_getMatchMask", (builder, method) =>
+        {
+            var body = method.Body!;
+            var returnStatement = body.Statements.First(s => s is ReturnStatementSyntax);
+
+            // conditional sse implementation
+            var statements = new List<SyntaxNode>
+            {
+                WrapWithIfDefined(SyntaxFactory.IfStatement(
+                    SyntaxFactory.IdentifierName("Sse2.IsSupported"),
+                    SyntaxFactory.Block(
+                        SyntaxFactory.SingletonList(
+                            returnStatement))), "NETCOREAPP3_0_OR_GREATER")
+            };
+
+            // arm implementation
+            var armImplementation = ParseBody(@"/* This NEON path only works for little endian - otherwise use SWAR below */
+            if (AdvSimd.IsSupported && BitConverter.IsLittleEndian)
+            {
+                if (rowEntries == 16)
+                {
+                    /* vshrn_n_u16 shifts by 4 every u16 and narrows to 8 lower bits.
+                     * After that groups of 4 bits represent the equalMask. We lower
+                     * all bits except the highest in these groups by doing AND with
+                     * 0x88 = 0b10001000.
+                     */
+                    Vector128<byte> chunk = AdvSimd.LoadVector128(src);
+                    Vector128<ushort> equalMask = AdvSimd.CompareEqual(chunk, AdvSimd.DuplicateToVector128(tag)).As<byte, ushort>();
+                    Vector64<byte> res = AdvSimd.ShiftRightLogicalNarrowingLower(equalMask, 4);
+                    ulong matches = res.As<byte, ulong>().GetElement(0);
+                    return BitOperations.RotateRight(matches, (int)headGrouped) & 0x8888888888888888;
+                }
+                else if (rowEntries == 32)
+                {
+#if NET9_0_OR_GREATER
+                    if (AdvSimd.Arm64.IsSupported)
+                    {
+                        /* Same idea as with rowEntries == 16 but doing AND with
+                         * 0x55 = 0b01010101.
+                         */
+                        (Vector128<ushort> chunk0, Vector128<ushort> chunk1) = AdvSimd.Arm64.LoadVector128x2AndUnzip((ushort*)src);
+                        Vector128<byte> dup = AdvSimd.DuplicateToVector128(tag);
+                        Vector64<byte> t0 = AdvSimd.ShiftRightLogicalNarrowingLower(AdvSimd.CompareEqual(chunk0.As<ushort, byte>(), dup).As<byte, ushort>(), 6);
+                        Vector64<byte> t1 = AdvSimd.ShiftRightLogicalNarrowingLower(AdvSimd.CompareEqual(chunk1.As<ushort, byte>(), dup).As<byte, ushort>(), 6);
+                        Vector64<byte> res = AdvSimd.ShiftLeftAndInsert(t0, t1, 4);
+                        ulong matches = res.As<byte, ulong>().GetElement(0);
+                        return BitOperations.RotateRight(matches, (int)headGrouped) & 0x5555555555555555;
+                    }
+#endif
+                }
+                else
+                { /* rowEntries == 64 */
+#if NET9_0_OR_GREATER
+                    if (AdvSimd.Arm64.IsSupported)
+                    {
+                        (Vector128<byte> chunk0, Vector128<byte> chunk1, Vector128<byte> chunk2, Vector128<byte> chunk3) = AdvSimd.Arm64.LoadVector128x4AndUnzip(src);
+                        Vector128<byte> dup = AdvSimd.DuplicateToVector128(tag);
+                        Vector128<byte> cmp0 = AdvSimd.CompareEqual(chunk0, dup);
+                        Vector128<byte> cmp1 = AdvSimd.CompareEqual(chunk1, dup);
+                        Vector128<byte> cmp2 = AdvSimd.CompareEqual(chunk2, dup);
+                        Vector128<byte> cmp3 = AdvSimd.CompareEqual(chunk3, dup);
+
+                        Vector128<byte> t0 = AdvSimd.ShiftRightAndInsert(cmp1, cmp0, 1);
+                        Vector128<byte> t1 = AdvSimd.ShiftRightAndInsert(cmp3, cmp2, 1);
+                        Vector128<byte> t2 = AdvSimd.ShiftRightAndInsert(t1, t0, 2);
+                        Vector128<byte> t3 = AdvSimd.ShiftRightAndInsert(t2, t2, 4);
+                        Vector64<byte> t4 = AdvSimd.ShiftRightLogicalNarrowingLower(t3.As<byte, ushort>(), 4);
+                        ulong matches = t4.As<byte, ulong>().GetElement(0);
+                        return BitOperations.RotateRight(matches, (int) headGrouped);
+                    }
+#endif
+                }
+            }");
+            builder.AddUsingDirective("System.Runtime.Intrinsics.Arm");
+            var armImplementationStatements = WrapWithIfDefined(armImplementation.Statements, "NET5_0_OR_GREATER");
+            statements.AddRange(armImplementationStatements);
+
+            // soft implementation
+            var softImplementation = ParseBody(@"
+                nuint chunkSize = (nuint)sizeof(nuint);
+                nuint shiftAmount = chunkSize * 8 - chunkSize;
+                nuint xFF = ~(nuint)0;
+                nuint x01 = xFF / 0xFF;
+                nuint x80 = x01 << 7;
+                nuint splatChar = tag * x01;
+                ulong matches = 0;
+                int i = (int)(rowEntries - chunkSize);
+                assert(sizeof(nuint) == 4 || sizeof(nuint) == 8);
+                if (BitConverter.IsLittleEndian)
+                {
+                    nuint extractMagic = xFF / 0x7F >> (int)chunkSize;
+                    do
+                    {
+                        nuint chunk = MEM_readST(&src[i]);
+                        chunk ^= splatChar;
+                        chunk = ((chunk | x80) - x01 | chunk) & x80;
+                        matches <<= (int)chunkSize;
+                        matches |= chunk * extractMagic >> (int)shiftAmount;
+                        i -= (int)chunkSize;
+                    }
+                    while (i >= 0);
+                }
+                else
+                {
+                    nuint msb = xFF ^ xFF >> 1;
+                    nuint extractMagic = msb / 0x1FF | msb;
+                    do
+                    {
+                        nuint chunk = MEM_readST(&src[i]);
+                        chunk ^= splatChar;
+                        chunk = ((chunk | x80) - x01 | chunk) & x80;
+                        matches <<= (int)chunkSize;
+                        matches |= (chunk >> 7) * extractMagic >> (int)shiftAmount;
+                        i -= (int)chunkSize;
+                    }
+                    while (i >= 0);
+                }
+
+                matches = ~matches;
+                if (rowEntries == 16)
+                {
+                    return BitOperations.RotateRight((ushort)matches, (int)headGrouped);
+                }
+                else if (rowEntries == 32)
+                {
+                    return BitOperations.RotateRight((uint)matches, (int)headGrouped);
+                }
+                else
+                {
+                    return BitOperations.RotateRight(matches, (int)headGrouped);
+                }");
+            builder.AddUsingDirective("System", "System.Numerics");
+            statements.Add(softImplementation);
+
+            return method.WithBody(body
+                .ReplaceNode(returnStatement, statements));
+        });
+
+        // ARM version
+        ModifyMethod("ZSTD_row_matchMaskGroupWidth", (_, method) =>
+            method.WithBody(ParseBody(@"
+            assert(rowEntries == 16 || rowEntries == 32 || rowEntries == 64);
+            assert(rowEntries <= 64);
+
+#if NET5_0_OR_GREATER
+            if (AdvSimd.IsSupported && BitConverter.IsLittleEndian)
+            {
+                if (rowEntries == 16)
+                    return 4;
+#if NET9_0_OR_GREATER
+                if (AdvSimd.Arm64.IsSupported)
+                {
+                    if (rowEntries == 32)
+                        return 2;
+                    if (rowEntries == 64)
+                        return 1;
+                }
+#endif
+            }
+#endif
+            return 1;"))
+        );
+
+        // unrolled SSE2 version
+        ModifyMethod("ZSTD_row_getSSEMask", (_, method) =>
+            WrapWithIfDefined(method.WithBody(ParseBody(@"
+            Vector128<byte> comparisonMask = Vector128.Create(tag);
+            assert(nbChunks is 1 or 2 or 4);
+            if (nbChunks == 1)
+            {
+                Vector128<byte> chunk0 = Sse2.LoadVector128(src);
+                Vector128<byte> equalMask0 = Sse2.CompareEqual(chunk0, comparisonMask);
+                int matches0 = Sse2.MoveMask(equalMask0);
+                return BitOperations.RotateRight((ushort)matches0, (int)head);
+            }
+
+            if (nbChunks == 2)
+            {
+                Vector128<byte> chunk0 = Sse2.LoadVector128(src);
+                Vector128<byte> equalMask0 = Sse2.CompareEqual(chunk0, comparisonMask);
+                int matches0 = Sse2.MoveMask(equalMask0);
+                Vector128<byte> chunk1 = Sse2.LoadVector128(src + 16);
+                Vector128<byte> equalMask1 = Sse2.CompareEqual(chunk1, comparisonMask);
+                int matches1 = Sse2.MoveMask(equalMask1);
+                return BitOperations.RotateRight((uint)matches1 << 16 | (uint)matches0, (int)head);
+            }
+
+            {
+                Vector128<byte> chunk0 = Sse2.LoadVector128(src);
+                Vector128<byte> equalMask0 = Sse2.CompareEqual(chunk0, comparisonMask);
+                int matches0 = Sse2.MoveMask(equalMask0);
+                Vector128<byte> chunk1 = Sse2.LoadVector128(src + 16 * 1);
+                Vector128<byte> equalMask1 = Sse2.CompareEqual(chunk1, comparisonMask);
+                int matches1 = Sse2.MoveMask(equalMask1);
+                Vector128<byte> chunk2 = Sse2.LoadVector128(src + 16 * 2);
+                Vector128<byte> equalMask2 = Sse2.CompareEqual(chunk2, comparisonMask);
+                int matches2 = Sse2.MoveMask(equalMask2);
+                Vector128<byte> chunk3 = Sse2.LoadVector128(src + 16 * 3);
+                Vector128<byte> equalMask3 = Sse2.CompareEqual(chunk3, comparisonMask);
+                int matches3 = Sse2.MoveMask(equalMask3);
+                return BitOperations.RotateRight((ulong)matches3 << 48 | (ulong)matches2 << 32 | (ulong)matches1 << 16 | (uint)matches0, (int)head);
+            }")), "NETCOREAPP3_0_OR_GREATER")
+        );
+    }
+
     public void ModifyProject()
     {
         var ctzBody = ParseBody("assert(val != 0);return (uint) BitOperations.TrailingZeroCount(val);");
@@ -345,8 +553,6 @@ internal class ProjectModifier
                 "            }"));
         });
 
-        ModifyMethod("ZSTD_row_getSSEMask", (_, method) => WrapWithIfDefined(method, "NETCOREAPP3_0_OR_GREATER"));
-
         ModifyMethod("BIT_getMiddleBits", (builder, method) =>
         {
             var body = method.Body!;
@@ -388,129 +594,7 @@ internal class ProjectModifier
         // switch to ifs
         ModifyMethod("ZSTD_hashPtrSalted", (_, method) => ConvertMethodSwitchToIfs(method));
 
-        // arm/sse2/soft versions
-        ModifyMethod("ZSTD_row_getMatchMask", (builder, method) =>
-        {
-            string? headParameterName;
-            if (method.ParameterList.Parameters.Any(p => p.Identifier.ToString() == "head"))
-            {
-                headParameterName = "head";
-            }
-            else if (method.ParameterList.Parameters.Any(p => p.Identifier.ToString() == "headGrouped"))
-            {
-                headParameterName = "headGrouped";
-            }
-            else
-            {
-                _reporter.Report(DiagnosticLevel.Error, "No head parameter");
-                return method;
-            }
-
-            var body = method.Body!;
-            var returnStatement = body.Statements.First(s => s is ReturnStatementSyntax);
-
-            // conditional sse implementation
-            var statements = new List<SyntaxNode>
-            {
-                WrapWithIfDefined(SyntaxFactory.IfStatement(
-                    SyntaxFactory.MemberAccessExpression(
-                        SyntaxKind.SimpleMemberAccessExpression,
-                        SyntaxFactory.IdentifierName("Sse2"),
-                        SyntaxFactory.IdentifierName("IsSupported")),
-                    SyntaxFactory.Block(
-                        SyntaxFactory.SingletonList(
-                            returnStatement))), "NETCOREAPP3_0_OR_GREATER")
-            };
-
-            // arm implementation
-            var armImplementation = ParseBody(
-                $"            /* This NEON path only works for little endian - otherwise use SWAR below */\r\n" +
-                $"            if (AdvSimd.IsSupported && BitConverter.IsLittleEndian)\r\n" +
-                $"            {{\r\n" +
-                $"                if (rowEntries == 16)\r\n" +
-                $"                {{\r\n" +
-                $"                    Vector128<byte> chunk = AdvSimd.LoadVector128(src);\r\n" +
-                $"                    Vector128<UInt16> equalMask = AdvSimd.CompareEqual(chunk, AdvSimd.DuplicateToVector128(tag)).As<byte, UInt16>();\r\n" +
-                $"                    Vector128<UInt16> t0 = AdvSimd.ShiftLeftLogical(equalMask, 7);\r\n" +
-                $"                    Vector128<UInt32> t1 = AdvSimd.ShiftRightAndInsert(t0, t0, 14).As<UInt16, UInt32>();\r\n" +
-                $"                    Vector128<UInt64> t2 = AdvSimd.ShiftRightLogical(t1, 14).As<UInt32, UInt64>();\r\n" +
-                $"                    Vector128<byte> t3 = AdvSimd.ShiftRightLogicalAdd(t2, t2, 28).As<UInt64, byte>();\r\n" +
-                $"                    ushort hi = AdvSimd.Extract(t3, 8);\r\n" +
-                $"                    ushort lo = AdvSimd.Extract(t3, 0);\r\n" +
-                $"                    return BitOperations.RotateRight((ushort)((hi << 8) | lo), (int){headParameterName});\r\n" +
-                $"                }}\r\n" +
-                $"                else if (rowEntries == 32)\r\n" +
-                $"                {{\r\n" +
-                $"                    // todo, there is no vld2q_u16 in c#\r\n" +
-                $"                }}\r\n" +
-                $"                else\r\n" +
-                $"                {{ /* rowEntries == 64 */\r\n" +
-                $"                    // todo, there is no vld4q_u8 in c#\r\n" +
-                $"                }}\r\n" +
-                $"            }}\r\n");
-            builder.AddUsingDirective("System.Runtime.Intrinsics.Arm");
-            var armImplementationStatements = WrapWithIfDefined(armImplementation.Statements, "NET5_0_OR_GREATER");
-            statements.AddRange(armImplementationStatements);
-
-            // soft implementation
-            var softImplementation = ParseBody(
-                $"                nuint chunkSize = (nuint)sizeof(nuint);\r\n" +
-                $"                nuint shiftAmount = chunkSize * 8 - chunkSize;\r\n" +
-                $"                nuint xFF = ~(nuint)0;\r\n" +
-                $"                nuint x01 = xFF / 0xFF;\r\n" +
-                $"                nuint x80 = x01 << 7;\r\n" +
-                $"                nuint splatChar = tag * x01;\r\n" +
-                $"                ulong matches = 0;\r\n" +
-                $"                int i = (int)(rowEntries - chunkSize);\r\n" +
-                $"                assert(sizeof(nuint) == 4 || sizeof(nuint) == 8);\r\n" +
-                $"                if (BitConverter.IsLittleEndian)\r\n" +
-                $"                {{\r\n" +
-                $"                    nuint extractMagic = xFF / 0x7F >> (int)chunkSize;\r\n" +
-                $"                    do\r\n" +
-                $"                    {{\r\n" +
-                $"                        nuint chunk = MEM_readST(&src[i]);\r\n" +
-                $"                        chunk ^= splatChar;\r\n" +
-                $"                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n" +
-                $"                        matches <<= (int)chunkSize;\r\n" +
-                $"                        matches |= (ulong)(chunk * extractMagic >> (int)shiftAmount);\r\n" +
-                $"                        i -= (int)chunkSize;\r\n" +
-                $"                    }}\r\n" +
-                $"                    while (i >= 0);\r\n" +
-                $"                }}\r\n" +
-                $"                else\r\n" +
-                $"                {{\r\n" +
-                $"                    nuint msb = xFF ^ xFF >> 1;\r\n" +
-                $"                    nuint extractMagic = msb / 0x1FF | msb;\r\n" +
-                $"                    do\r\n" +
-                $"                    {{\r\n" +
-                $"                        nuint chunk = MEM_readST(&src[i]);\r\n" +
-                $"                        chunk ^= splatChar;\r\n" +
-                $"                        chunk = ((chunk | x80) - x01 | chunk) & x80;\r\n" +
-                $"                        matches <<= (int)chunkSize;\r\n" +
-                $"                        matches |= (ulong)((chunk >> 7) * extractMagic >> (int)shiftAmount);\r\n" +
-                $"                        i -= (int)chunkSize;\r\n" +
-                $"                    }}\r\n" +
-                $"                    while (i >= 0);\r\n" +
-                $"                }}\r\n\r\n" +
-                $"                matches = ~matches;\r\n" +
-                $"                if (rowEntries == 16)\r\n" +
-                $"                {{\r\n" +
-                $"                    return BitOperations.RotateRight((ushort)matches, (int){headParameterName});\r\n" +
-                $"                }}\r\n" +
-                $"                else if (rowEntries == 32)\r\n" +
-                $"                {{\r\n" +
-                $"                    return BitOperations.RotateRight((uint)matches, (int){headParameterName});\r\n" +
-                $"                }}\r\n" +
-                $"                else\r\n" +
-                $"                {{\r\n" +
-                $"                    return BitOperations.RotateRight((ulong)matches, (int){headParameterName});\r\n" +
-                $"                }}");
-            builder.AddUsingDirective("System", "System.Numerics");
-            statements.Add(softImplementation);
-
-            return method.WithBody(body
-                .ReplaceNode(returnStatement, statements));
-        });
+        ModifyVectorCode();
 
         if (_projectBuilder.HasMethod("ZSTD_searchMax"))
         {
