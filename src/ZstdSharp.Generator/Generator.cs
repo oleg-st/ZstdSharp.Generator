@@ -265,10 +265,17 @@ public class Generator
                 {"JobThreadPool.cs", "SynchronizationWrapper.cs", "UnmanagedObject.cs", "Pool.cs"});
         }
 
+        // inside of nested arrays, don't work in .NET Native
+        var excludeFunctionPointers = new HashSet<string>
+        {
+            "ZSTD_getAllMatchesFn", "ZSTD_blockCompressor",
+        };
+
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
             remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
-            callReplacements: callReplacements, structToClasses: structToClasses, sourceExcludeNames: sourceExcludeNames);
+            callReplacements: callReplacements, structToClasses: structToClasses, sourceExcludeNames: sourceExcludeNames,
+            excludeFunctionPointers: excludeFunctionPointers);
     }
 
     public async Task Generate()
