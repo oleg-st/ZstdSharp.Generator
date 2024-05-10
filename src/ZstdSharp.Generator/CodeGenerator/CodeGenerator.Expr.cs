@@ -102,9 +102,25 @@ internal partial class CodeGenerator
 
     private SyntaxNode VisitConditionalOperator(ConditionalOperator conditionalOperator)
     {
-        return SyntaxFactory.ConditionalExpression(Visit<ExpressionSyntax>(conditionalOperator.Cond)!,
-            Visit<ExpressionSyntax>(conditionalOperator.TrueExpr)!,
-            Visit<ExpressionSyntax>(conditionalOperator.FalseExpr)!);
+        var cond = Visit<ExpressionSyntax>(conditionalOperator.Cond)!;
+        var whenTrue = Visit<ExpressionSyntax>(conditionalOperator.TrueExpr)!;
+        var whenFalse = Visit<ExpressionSyntax>(conditionalOperator.FalseExpr)!;
+        var constantCond = TreeHelper.GetValueOfType<bool>(cond);
+
+        if (constantCond.HasValue)
+        {
+            if (constantCond.Value && IsPureExpr(whenFalse))
+            {
+                return whenTrue;
+            }
+
+            if (!constantCond.Value && IsPureExpr(whenTrue))
+            {
+                return whenFalse;
+            }
+        }
+
+        return SyntaxFactory.ConditionalExpression(cond, whenTrue, whenFalse);
     }
 
     private SyntaxNode VisitMemberExpr(MemberExpr memberExpr)

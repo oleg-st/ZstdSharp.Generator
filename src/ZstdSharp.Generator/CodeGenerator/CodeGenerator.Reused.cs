@@ -534,6 +534,7 @@ internal partial class CodeGenerator
             MemberAccessExpressionSyntax memberExpr => IsConstExpr(memberExpr.Expression),
             LiteralExpressionSyntax => true,
             SizeOfExpressionSyntax sizeOfExpression => IsSizeOfConst(sizeOfExpression.Type),
+            ConditionalExpressionSyntax conditionalExpression => IsConstExpr(conditionalExpression.Condition) && IsConstExpr(conditionalExpression.WhenTrue) && IsConstExpr(conditionalExpression.WhenFalse),
             _ => false,
         };
     }
