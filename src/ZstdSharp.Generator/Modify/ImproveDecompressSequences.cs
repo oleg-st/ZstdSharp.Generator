@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
+﻿using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
@@ -37,6 +36,7 @@ internal class ImproveDecompressSequences
             new (_projectBuilder, "BIT_reloadDStreamFast", new HashSet<string> { "bitD" }),
             new (_projectBuilder, "BIT_reloadDStream", new HashSet<string> { "bitD" }),
             new (_projectBuilder, "BIT_reloadDStream_internal", new HashSet<string> { "bitD" }),
+            new (_projectBuilder, "BIT_endOfDStream", new HashSet<string> { "DStream" }),
             // decompress
             new (_projectBuilder, "ZSTD_initFseState", new HashSet<string> { "DStatePtr", "bitD" }),
             new (_projectBuilder, "ZSTD_updateFseStateWithDInfo", new HashSet<string> { "DStatePtr", "bitD" }),
@@ -283,21 +283,19 @@ internal class ImproveDecompressSequences
 
             foreach (var variable in variables)
             {
-                if (projectBuilder.TryGetTypeDeclaration(variable.Type.ToString(), out var typeDeclaration, out _))
+                if (projectBuilder.TryGetTypeDeclaration(variable.Type.ToString(), out var typeDeclaration, out _) &&
+                    typeDeclaration is StructDeclarationSyntax structDeclaration)
                 {
-                    if (typeDeclaration is StructDeclarationSyntax structDeclaration)
-                    {
-                        _structToVariables.Add(variable.Name, new StructToVariableInfo(
-                            variable.Name,
-                            variable.Type,
-                            variable.Prefix,
-                            structDeclaration.Members
-                                .OfType<FieldDeclarationSyntax>().SelectMany(f =>
-                                    f.Declaration.Variables.Select(v => (v, f.Declaration.Type)))
-                                .ToDictionary(v => v.v.Identifier.ToString(), v => v.Type),
-                            _method.ParameterList.Parameters.Any(p => p.Identifier.ToString() == variable.Name)
-                        ));
-                    }
+                    _structToVariables.Add(variable.Name, new StructToVariableInfo(
+                        variable.Name,
+                        variable.Type,
+                        variable.Prefix,
+                        structDeclaration.Members
+                            .OfType<FieldDeclarationSyntax>().SelectMany(f =>
+                                f.Declaration.Variables.Select(v => (v, f.Declaration.Type)))
+                            .ToDictionary(v => v.v.Identifier.ToString(), v => v.Type),
+                        _method.ParameterList.Parameters.Any(p => p.Identifier.ToString() == variable.Name)
+                    ));
                 }
             }
         }
@@ -616,6 +614,116 @@ internal class ImproveDecompressSequences
         }
     }
 
+    private class ExtractDStream : CSharpSyntaxRewriter
+    {
+        private readonly ProjectBuilder _projectBuilder;
+        private readonly MethodDeclarationSyntax _method;
+        private readonly IReporter _reporter;
+        private ForStatementSyntax? _mainForStatement;
+
+        private record Field(string Name, string FieldName, TypeSyntax Type);
+
+        private readonly List<Field> _fields;
+
+        public ExtractDStream(ProjectBuilder projectBuilder, IReporter reporter, MethodDeclarationSyntax method)
+        {
+            _projectBuilder = projectBuilder;
+            _reporter = reporter;
+            _method = method;
+            _fields = new List<Field>();
+        }
+
+        public override SyntaxNode? VisitForStatement(ForStatementSyntax node)
+        {
+            if (node == _mainForStatement)
+            {
+                return FoldBlockHelper.CombineStatements(
+                    _fields.Select(f => SyntaxFactory.LocalDeclarationStatement(
+                        SyntaxFactory.VariableDeclaration(f.Type)
+                            .WithVariables(
+                                SyntaxFactory.SingletonSeparatedList(
+                                    SyntaxFactory.VariableDeclarator(
+                                            SyntaxFactory.Identifier($"{f.Name}_{f.FieldName}"))
+                                        .WithInitializer(
+                                            SyntaxFactory.EqualsValueClause(
+                                                SyntaxFactory.IdentifierName($"{f.Name}.{f.FieldName}"))))))).Concat(
+                        new[]
+                        {
+                            (base.VisitForStatement(node) as StatementSyntax)!
+                        }).ToArray());
+            }
+        
+            return base.VisitForStatement(node);
+        }
+
+        public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
+        {
+            // seqState.DStream -> seqState_DStream, below main loop for
+            if (_mainForStatement != null &&
+                node.SpanStart > _mainForStatement.SpanStart &&
+                node.Kind() == SyntaxKind.SimpleMemberAccessExpression &&
+                node.Expression is IdentifierNameSyntax identifierName &&
+                node.Name is IdentifierNameSyntax name)
+            {
+                var field = _fields.FirstOrDefault(f =>
+                    f.Name == identifierName.Identifier.ToString() && name.Identifier.ToString() == f.FieldName);
+                if (field != null)
+                {
+                    return SyntaxFactory.IdentifierName($"{field.Name}_{field.FieldName}");
+                }
+            }
+
+            return base.VisitMemberAccessExpression(node);
+        }
+
+
+        public MethodDeclarationSyntax Run()
+        {
+            foreach (var node in _method.DescendantNodes())
+            {
+                // for (...; ...; nbSeq)
+                if (node is ForStatementSyntax forStatement &&
+                    forStatement.Incrementors.Any(x => x.DescendantNodes().Any(n =>
+                        n is IdentifierNameSyntax name && name.Identifier.ToString() == "nbSeq")))
+                {
+                    _mainForStatement = forStatement;
+                    break;
+                }
+            }
+
+            if (_mainForStatement == null)
+            {
+                _reporter.Report(DiagnosticLevel.Error, $"Cannot find main loop in {_method.Identifier}");
+            }
+
+            // find seqState.DStream
+            var varName = "seqState";
+            var fieldNames = new HashSet<string> {"DStream"};
+            var localDeclaration = _method.DescendantNodes().OfType<LocalDeclarationStatementSyntax>()
+                .FirstOrDefault(l => l.Declaration.Variables.Any(v => v.Identifier.ToString() == varName));
+
+            if (localDeclaration != null &&
+                _projectBuilder.TryGetTypeDeclaration(localDeclaration.Declaration.Type.ToString(),
+                    out var typeDeclaration, out _) &&
+                typeDeclaration is StructDeclarationSyntax structDeclaration)
+            {
+                foreach (var field in structDeclaration.Members.OfType<FieldDeclarationSyntax>().SelectMany(f =>
+                                 f.Declaration.Variables.Select(v => (v, f.Declaration.Type)))
+                             .Where(t => fieldNames.Contains(t.v.Identifier.ToString())))
+                {
+                    _fields.Add(new Field(varName, field.v.Identifier.ToString(), field.Type));
+                }
+            }
+
+            if (_fields.Count == 0)
+            {
+                _reporter.Report(DiagnosticLevel.Error, $"Cannot find {varName} in {_method.Identifier}");
+            }
+
+            return (FoldBlockHelper.FoldBlocks(Visit(_method)) as MethodDeclarationSyntax)!;
+        }
+    }
+
     public void Run()
     {
         if (!_projectBuilder.TryGetMethod(ZstdDecompressSequencesBody, out var builder, out var decompressMethod))
@@ -667,12 +775,15 @@ internal class ImproveDecompressSequences
                             p.Identifier.ToString()))
                     .ToList()).Run());
 
-        // NET8+ version: use refs instead of pointers, inline ZSTD_decodeSequence, expand seq struct to locals
+        // NET8+ version: use refs instead of pointers, inline ZSTD_decodeSequence, expand seq struct to locals, extract DStream from seqState to local var
         _projectBuilder.ModifyMethod(ZstdDecompressSequencesBody, (_, method) =>
             ProjectModifier.WrapWithIfDefined(
-                new PointerToRefFixedBuffer().Run(
-                    new DecompressSequencesModifier(_projectBuilder, _reporter,
-                        ProjectModifier.AddSkipInit(method, "seqState"), _refMethods, true).Run()),
+                new ExtractDStream(_projectBuilder, _reporter,
+                        new PointerToRefFixedBuffer().Run(
+                            new DecompressSequencesModifier(_projectBuilder, _reporter,
+                                    ProjectModifier.AddSkipInit(method, "seqState"), _refMethods, true)
+                                .Run()))
+                    .Run(),
                 "NET8_0_OR_GREATER"));
 
         // NET7 and lower version
