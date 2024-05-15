@@ -93,6 +93,12 @@ internal static class TreeHelper
                     case SyntaxKind.NotEqualsExpression:
                         value = leftIntValue != rightIntValue;
                         return true;
+                    case SyntaxKind.LeftShiftExpression:
+                        value = leftIntValue << rightIntValue;
+                        return true;
+                    case SyntaxKind.RightShiftExpression:
+                        value = leftIntValue >> rightIntValue;
+                        return true;
                     // todo other
                 }
             }
