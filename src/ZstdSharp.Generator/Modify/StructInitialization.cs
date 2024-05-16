@@ -9,8 +9,13 @@ namespace ZstdSharp.Generator.Modify;
 
 internal class StructInitialization
 {
-    private bool IsNodesSame(SyntaxNode left, SyntaxNode right)
+    private bool IsNodesSame(SyntaxNode? left, SyntaxNode? right)
     {
+        if (left == null || right == null)
+        {
+            return left == right;
+        }
+
         if (left is ExpressionSyntax leftExpression)
         {
             left = TreeHelper.GetInnerExpression(leftExpression);
@@ -24,9 +29,6 @@ internal class StructInitialization
         // todo check two expressions is the same (x.y = x.y)
         return left.GetType() == right.GetType() && left.ToString() == right.ToString();
     }
-
-    private bool HasSameNodesInside(SyntaxNode parent, IEnumerable<SyntaxNode> needle)
-        => parent.DescendantNodesAndSelf().Any(x => needle.Any(n => IsNodesSame(x, n)));
 
     public MethodDeclarationSyntax Process(MethodDeclarationSyntax method)
     {
@@ -95,20 +97,29 @@ internal class StructInitialization
                                     memberAccessExpression.Kind() == SyntaxKind.SimpleMemberAccessExpression &&
                                     IsNodesSame(memberAccessExpression.Expression, leftExpression)
                                 )
-                            ) &&
-                            // check init expressions inside expression
-                            !HasSameNodesInside(nextAssignmentExpressionSyntax.Right, initExpressions
-                                .OfType<AssignmentExpressionSyntax>()
-                                .Where(x => x.Left is IdentifierNameSyntax)
-                                .Select(x =>
-                                    SyntaxFactory.MemberAccessExpression(memberAccessExpression.Kind(),
-                                        memberAccessExpression.Expression, (x.Left as IdentifierNameSyntax)!)))
+                            )
                         )
                         {
+                            // check init expressions inside expression
+                            var initNodes = initExpressions
+                                .Select(x =>
+                                    x is AssignmentExpressionSyntax {Left: IdentifierNameSyntax name}
+                                        ? SyntaxFactory.MemberAccessExpression(memberAccessExpression.Kind(),
+                                            memberAccessExpression.Expression, name)
+                                        : null
+                                ).ToList();
+
+                            var value = nextAssignmentExpressionSyntax.Right;
+                            // has dependency -> stop
+                            if (HasDependency(initExpressions, memberAccessExpression, ref value))
+                            {
+                                break;
+                            }
+
                             nodes.Add(nextStatement);
                             initExpressions.Add(SyntaxFactory.AssignmentExpression(
                                 SyntaxKind.SimpleAssignmentExpression,
-                                memberAccessExpression.Name, nextAssignmentExpressionSyntax.Right));
+                                memberAccessExpression.Name, value));
                             // go next statement
                             continue;
                         }
@@ -138,5 +149,38 @@ internal class StructInitialization
         }
 
         return method;
+    }
+
+    private bool HasDependency(List<ExpressionSyntax> initExpressions,
+        MemberAccessExpressionSyntax memberAccessExpression,
+        ref ExpressionSyntax value)
+    {
+        foreach (var initExpression in initExpressions)
+        {
+            if (initExpression is AssignmentExpressionSyntax {Left: IdentifierNameSyntax name} assignment)
+            {
+                var initNode = SyntaxFactory.MemberAccessExpression(memberAccessExpression.Kind(),
+                    memberAccessExpression.Expression, name);
+
+                start:
+                foreach (var valueNode in value.DescendantNodesAndSelf())
+                {
+                    if (IsNodesSame(initNode, valueNode))
+                    {
+                        // replace if pure
+                        if (CodeGenerator.CodeGenerator.IsPureExpr(assignment.Right))
+                        {
+                            // replace and start over
+                            value = value.ReplaceNode(valueNode, assignment.Right);
+                            goto start;
+                        }
+
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
     }
 }
