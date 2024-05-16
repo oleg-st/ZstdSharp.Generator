@@ -33,14 +33,16 @@ internal class CallReplacer
             return ArgumentTypes != null && index < ArgumentTypes.Length ? ArgumentTypes[index] : null;
         }
 
-        public abstract SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax);
+        public abstract SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax, Expr expr,
+            CodeGenerator codeGenerator);
     }
 
     public class CallReplacementInvocation : CallReplacement
     {
         public string Replacement { get; }
 
-        public override SyntaxNode Apply(InvocationExpressionSyntax invocationExpressionSyntax)
+        public override SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax, Expr expr,
+            CodeGenerator codeGenerator)
         {
             return SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName(Replacement))
                 .WithArgumentList(invocationExpressionSyntax.ArgumentList);
@@ -56,7 +58,8 @@ internal class CallReplacer
     {
         public ExpressionSyntax ExpressionSyntax{ get; }
 
-        public override SyntaxNode Apply(InvocationExpressionSyntax invocationExpressionSyntax)
+        public override SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax, Expr expr,
+            CodeGenerator codeGenerator)
         {
             return ExpressionSyntax;
         }
@@ -69,7 +72,8 @@ internal class CallReplacer
 
     public class CallReplacementIdentity: CallReplacement
     {
-        public override SyntaxNode Apply(InvocationExpressionSyntax invocationExpressionSyntax)
+        public override SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax, Expr expr,
+            CodeGenerator codeGenerator)
         {
             return invocationExpressionSyntax;
         }
@@ -81,7 +85,8 @@ internal class CallReplacer
 
     public class CallReplacementRemove: CallReplacement
     {
-        public override SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax)
+        public override SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax, Expr expr,
+            CodeGenerator codeGenerator)
         {
             return null;
         }

@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using ClangSharp;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -17,7 +18,8 @@ internal class PrefetchCalls : ICallsModifier
 
         private readonly int _level;
 
-        public override SyntaxNode Apply(InvocationExpressionSyntax invocationExpressionSyntax)
+        public override SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax, Expr expr,
+            CodeGenerator codeGenerator)
         {
             return ProjectModifier.WrapWithIfDefined(SyntaxFactory.IfStatement(
                     SyntaxFactory.IdentifierName("System.Runtime.Intrinsics.X86.Sse.IsSupported"),
@@ -94,7 +96,7 @@ internal class PrefetchCalls : ICallsModifier
                         if (nextPrefetchBlock != null &&
                             nextPrefetchBlock.Root.HasAnnotation(CallReplacementPrefetch.PrefetchCallAnnotation))
                         {
-                            var newPrefetch= prefetchBlock.Merge(nextPrefetchBlock);
+                            var newPrefetch = prefetchBlock.Merge(nextPrefetchBlock);
                             // replace & delete (null)
                             sourceNode = sourceNode.ReplaceNodes(new[] {prefetchBlock.Root, nextPrefetchBlock.Root},
                                 (originalNode, _) => originalNode == prefetchBlock.Root

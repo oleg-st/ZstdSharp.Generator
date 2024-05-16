@@ -87,7 +87,7 @@ internal partial class CodeGenerator
                         AddUsing(callReplacement.UsingDirective);
                     }
 
-                    return callReplacement.Apply(invocationExpressionSyntax);
+                    return callReplacement.Apply(invocationExpressionSyntax, expr, this);
                 }
             }
         }

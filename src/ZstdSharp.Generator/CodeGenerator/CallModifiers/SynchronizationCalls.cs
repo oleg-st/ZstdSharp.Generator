@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.CodeAnalysis;
 using System.Collections.Generic;
+using ClangSharp;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using ZstdSharp.Generator.CodeGenerator.TypeCaster;
@@ -13,25 +14,26 @@ internal class SynchronizationCalls : ICallsModifier
     {
         public string Replacement { get; }
 
-        public override SyntaxNode Apply(InvocationExpressionSyntax invocationExpressionSyntax)
+        public override SyntaxNode? Apply(InvocationExpressionSyntax invocationExpressionSyntax, Expr expr,
+            CodeGenerator codeGenerator)
         {
             var arg = invocationExpressionSyntax.ArgumentList.Arguments[0];
-            var expr = TreeHelper.GetInnerExpression(arg.Expression).ToString();
+            var argExpr = TreeHelper.GetInnerExpression(arg.Expression).ToString();
 
             // cond -> mutex, Cond -> Mutex, beware of reusing mutex for multiple condition variables
-            if (expr.Contains("cond"))
+            if (argExpr.Contains("cond"))
             {
-                expr = expr.Replace("cond", "mutex");
-            } else if (expr.Contains("Cond"))
+                argExpr = argExpr.Replace("cond", "mutex");
+            } else if (argExpr.Contains("Cond"))
             {
-                expr = expr.Replace("Cond", "Mutex");
+                argExpr = argExpr.Replace("Cond", "Mutex");
             }
             else
             {
-                throw new Exception($"Failed to determine an object for condition variable {expr}");
+                throw new Exception($"Failed to determine an object for condition variable {argExpr}");
             }
 
-            var expression = SyntaxFactory.ParseExpression(expr);
+            var expression = SyntaxFactory.ParseExpression(argExpr);
             return SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName(Replacement))
                 .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SingletonSeparatedList(SyntaxFactory.Argument(expression))));
         }

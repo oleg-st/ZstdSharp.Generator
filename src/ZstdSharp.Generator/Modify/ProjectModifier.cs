@@ -789,9 +789,20 @@ internal class ProjectModifier
         ModifyFastCLoop(FastCLoopMethod.Decompress4X2);
         // Guard full assert blocks with DEBUG condition
         GuardAsserts();
+        // x = new T(); x.f = ...; -> x = new T { f = ... };
+        ProcessStructInitialization();
 
         // improve decompression
         new ImproveDecompressSequences(_projectBuilder, _reporter).Run();
+    }
+
+    private void ProcessStructInitialization()
+    {
+        var structInitialization = new StructInitialization();
+        foreach (var methodName in _projectBuilder.GetMethods())
+        {
+            ModifyMethod(methodName, (_, method) => structInitialization.Process(method));
+        }
     }
 
     private void ModifyFastCLoop(FastCLoopMethod fastCLoopMethod)
