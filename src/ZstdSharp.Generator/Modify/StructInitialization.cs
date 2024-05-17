@@ -110,8 +110,8 @@ internal class StructInitialization
                                 ).ToList();
 
                             var value = nextAssignmentExpressionSyntax.Right;
-                            // has dependency -> stop
-                            if (HasDependency(initExpressions, memberAccessExpression, ref value))
+                            // try to remove dependencies from init expressions -> stop otherwise
+                            if (!TryRemoveDependency(initExpressions, memberAccessExpression, ref value))
                             {
                                 break;
                             }
@@ -151,7 +151,7 @@ internal class StructInitialization
         return method;
     }
 
-    private bool HasDependency(List<ExpressionSyntax> initExpressions,
+    private bool TryRemoveDependency(List<ExpressionSyntax> initExpressions,
         MemberAccessExpressionSyntax memberAccessExpression,
         ref ExpressionSyntax value)
     {
@@ -175,12 +175,12 @@ internal class StructInitialization
                             goto start;
                         }
 
-                        return true;
+                        return false;
                     }
                 }
             }
         }
 
-        return false;
+        return true;
     }
 }
