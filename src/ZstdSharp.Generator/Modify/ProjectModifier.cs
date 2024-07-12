@@ -208,7 +208,7 @@ internal class ProjectModifier
                     {
                         var callSkipInit = SyntaxFactory.ExpressionStatement(
                             SyntaxFactory.InvocationExpression(
-                                    SyntaxFactory.IdentifierName("SkipInit"))
+                                    SyntaxFactory.IdentifierName("System.Runtime.CompilerServices.Unsafe.SkipInit"))
                                 .WithArgumentList(
                                     SyntaxFactory.ArgumentList(
                                         SyntaxFactory.SingletonSeparatedList(
