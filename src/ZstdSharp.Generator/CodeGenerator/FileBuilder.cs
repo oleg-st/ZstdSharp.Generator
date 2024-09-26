@@ -115,39 +115,39 @@ internal class FileBuilder
         return true;
     }
 
-    private UsingDirectiveSyntax GetUsingDirective(string name)
-    {
-        var usingDirective = SyntaxFactory.UsingDirective(SyntaxFactory.IdentifierName(name));
-
-        var ifDefined = name switch
+    private string? GetConditionForUsing(string name)
+        => name switch
         {
-            "System.Runtime.Intrinsics.X86" => "NETCOREAPP3_0_OR_GREATER",
+            "System.Runtime.Intrinsics" or "System.Runtime.Intrinsics.X86" => "NETCOREAPP3_0_OR_GREATER",
             "System.Runtime.Intrinsics.Arm" => "NET5_0_OR_GREATER",
             _ => null
         };
 
-        if (ifDefined != null)
-        {
-            usingDirective = usingDirective
-                .WithLeadingTrivia(SyntaxFactory.Trivia(
-                    SyntaxFactory.IfDirectiveTrivia(
-                        SyntaxFactory.IdentifierName(ifDefined),
-                        true,
-                        false,
-                        false)))
-                .WithTrailingTrivia(SyntaxFactory.Trivia(
-                    SyntaxFactory.EndIfDirectiveTrivia(
-                        true)));
-        }
-
-        return usingDirective;
-    }
-
     private IEnumerable<UsingDirectiveSyntax> GetUsingDirectives()
     {
-        foreach (var usingDirective in UsingDirectives.Select(GetUsingDirective))
+        foreach (var kvp in UsingDirectives.GroupBy(GetConditionForUsing, u => u))
         {
-            yield return usingDirective;
+            var ifDefined = kvp.Key;
+            var usingDirectives = kvp.Select(name => SyntaxFactory.UsingDirective(SyntaxFactory.IdentifierName(name))).ToList();
+            if (ifDefined != null)
+            {
+                usingDirectives[0] = usingDirectives[0]
+                    .WithLeadingTrivia(SyntaxFactory.Trivia(
+                        SyntaxFactory.IfDirectiveTrivia(
+                            SyntaxFactory.IdentifierName(ifDefined),
+                            true,
+                            false,
+                            false)));
+                usingDirectives[^1] = usingDirectives[^1]
+                    .WithTrailingTrivia(SyntaxFactory.Trivia(
+                        SyntaxFactory.EndIfDirectiveTrivia(
+                            true)));
+            }
+
+            foreach (var usingDirective in usingDirectives)
+            {
+                yield return usingDirective;
+            }
         }
     }
 
