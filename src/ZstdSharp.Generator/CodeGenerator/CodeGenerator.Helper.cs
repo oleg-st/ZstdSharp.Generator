@@ -541,9 +541,6 @@ internal partial class CodeGenerator
 
         var arrayElementType = arrayPointerInitializer.Type.ElementType;
         var identifier = fieldDeclarationSyntax.Declaration.Variables[0].Identifier;
-        var directiveName = Net7SpanArrayCreation(arrayElementType)
-                ? "NET7_0_OR_GREATER"
-                : "NET8_0_OR_GREATER";
         AddUsing("System");
         AddUsing("System.Runtime.InteropServices");
 
@@ -562,7 +559,7 @@ internal partial class CodeGenerator
                 SyntaxFactory.Token(SyntaxKind.SemicolonToken))
             .WithLeadingTrivia(SyntaxFactory.Trivia(
                 SyntaxFactory.IfDirectiveTrivia(
-                    SyntaxFactory.IdentifierName(directiveName),
+                    SyntaxFactory.IdentifierName("NET7_0_OR_GREATER"),
                     true,
                     false,
                     false)));
@@ -644,7 +641,7 @@ internal partial class CodeGenerator
                     SyntaxFactory.Token(SyntaxKind.PrivateKeyword),
                     SyntaxFactory.Token(SyntaxKind.StaticKeyword),
                     SyntaxFactory.Token(SyntaxKind.ReadOnlyKeyword)));
-        if (Config.ArrayCreateOptimization && Net8SpanArrayCreation(type))
+        if (Config.ArrayCreateOptimization && Net7SpanArrayCreation(type))
         {
             fieldDeclarationSyntax = CreateArrayOptimization(fieldDeclarationSyntax);
         }
@@ -740,13 +737,12 @@ internal partial class CodeGenerator
     internal bool UseFunctionPointerForType(string name) 
         => Config.UseFunctionPointers && !Config.ExcludeFunctionPointers.Contains(name);
 
-    internal static bool Net7SpanArrayCreation(TypeSyntax typeSyntax) => typeSyntax.ToString() is "byte" or "sbyte" or "bool";
-
-    internal static bool Net8SpanArrayCreation(TypeSyntax typeSyntax) => Net7SpanArrayCreation(typeSyntax) ||
-                                                                      typeSyntax.ToString() is "short" or "ushort"
-                                                                          or "char" or "int"
-                                                                          or "uint" or "long" or "ulong" or "double"
-                                                                          or "float";
+    internal static bool Net7SpanArrayCreation(TypeSyntax typeSyntax) =>
+        typeSyntax.ToString() is "byte" or "sbyte"
+            or "bool" or "short" or "ushort"
+            or "char" or "int"
+            or "uint" or "long" or "ulong" or "double"
+            or "float";
 
     internal bool IsArtificialFixedBufferAccess(Expr expr, [MaybeNullWhen(false)] out Expr subExpression, out long size)
     {

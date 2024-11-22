@@ -417,7 +417,7 @@ internal partial class CodeGenerator
 
         if (Config.ArrayCreateOptimization && arrayPointerInitializer != null &&
             fieldDeclarationSyntax.Declaration.Type is PointerTypeSyntax pointerType &&
-            Net8SpanArrayCreation(pointerType.ElementType))
+            Net7SpanArrayCreation(pointerType.ElementType))
         {
             fieldDeclarationSyntax = CreateArrayOptimization(fieldDeclarationSyntax);
         }
