@@ -18,27 +18,12 @@ namespace ZstdSharp
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void* malloc(uint size)
-        {
-#if NET6_0_OR_GREATER
-            var ptr = NativeMemory.Alloc(size);
-#else
-            var ptr = (void*) Marshal.AllocHGlobal((int) size);
-#endif
-#if DEBUG
-            return PoisonMemory(ptr, size);
-#else
-            return ptr;
-#endif
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void* malloc(ulong size)
         {
 #if NET6_0_OR_GREATER
             var ptr = NativeMemory.Alloc((nuint) size);
 #else
-            var ptr = (void*) Marshal.AllocHGlobal((int) size);
+            var ptr = (void*) Marshal.AllocHGlobal((nint) size);
 #endif
 #if DEBUG
             return PoisonMemory(ptr, size);
@@ -72,12 +57,6 @@ namespace ZstdSharp
             => System.Runtime.CompilerServices.Unsafe.InitBlockUnaligned(memPtr, val, size);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        [InlineMethod.Inline]
-        public static void memset<T>(ref T memPtr, byte val, uint size)
-            => System.Runtime.CompilerServices.Unsafe.InitBlockUnaligned(
-                ref System.Runtime.CompilerServices.Unsafe.As<T, byte>(ref memPtr), val, size);
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void free(void* ptr)
         {
 #if NET6_0_OR_GREATER
@@ -91,11 +70,13 @@ namespace ZstdSharp
         public static T* GetArrayPointer<T>(T[] array) where T : unmanaged
         {
             var size = (uint)(sizeof(T) * array.Length);
-#if NET5_0_OR_GREATER
+#if NET9_0_OR_GREATER
             // This function is used to allocate memory for static data blocks.
             // We have to use AllocateTypeAssociatedMemory and link the memory's
             // lifetime to this assembly, in order to prevent memory leaks when
             // loading the assembly in an unloadable AssemblyLoadContext.
+            // While introduced in .NET 5, we call this only in .NET 9+, because
+            // it's not implemented in the Mono runtime until then.
             var destination = (T*)RuntimeHelpers.AllocateTypeAssociatedMemory(typeof(UnsafeHelper), (int)size);
 #else
             var destination = (T*)malloc(size);
