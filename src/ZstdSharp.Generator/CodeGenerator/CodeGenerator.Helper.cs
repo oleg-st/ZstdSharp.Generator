@@ -867,4 +867,14 @@ internal partial class CodeGenerator
 
     private TypeSyntax HideFunctionPointer(TypeSyntax typeSyntax) 
         => GetType("void*");
+
+    private bool IsConstSize(Cursor cursor)
+    {
+        if (cursor is UnaryExprOrTypeTraitExpr {Kind: CX_UnaryExprOrTypeTrait.CX_UETT_SizeOf} unaryExprOrTypeTraitExpr)
+        {
+            return IsSizeOfConst(unaryExprOrTypeTraitExpr);
+        }
+
+        return cursor.CursorChildren.All(IsConstSize);
+    }
 }

@@ -6,11 +6,13 @@ using System.Linq;
 using System.Threading.Tasks;
 using ClangSharp;
 using ClangSharp.Interop;
+using Microsoft.CodeAnalysis.CSharp;
 using ZstdSharp.Generator.CodeGenerator;
 using ZstdSharp.Generator.CodeGenerator.CallModifiers;
 using ZstdSharp.Generator.CodeGenerator.Macros;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
 using ZstdSharp.Generator.CodeGenerator.TypeCaster;
+using ZstdSharp.Generator.CodeGenerator.VariableSize;
 using ZstdSharp.Generator.Modify;
 
 // ReSharper disable StringLiteralTypo
@@ -270,11 +272,17 @@ public class Generator
             "ZSTD_getAllMatchesFn", "ZSTD_blockCompressor",
         };
 
+        var variableSizeTypes = new Dictionary<string, IVariableSizeType>
+        {
+            // sizeof(HUF_CTableHeader) == sizeof(nuint)
+            {"HUF_CTableHeader", new OverrideSize(SyntaxFactory.IdentifierName("nuint"))},
+        };
+
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
             remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
             callReplacements: callReplacements, structToClasses: structToClasses, sourceExcludeNames: sourceExcludeNames,
-            excludeFunctionPointers: excludeFunctionPointers);
+            excludeFunctionPointers: excludeFunctionPointers, variableSizeTypes: variableSizeTypes);
     }
 
     public async Task Generate()

@@ -2,6 +2,7 @@
 using System.Collections.Immutable;
 using System.Linq;
 using ZstdSharp.Generator.CodeGenerator.TypeCaster;
+using ZstdSharp.Generator.CodeGenerator.VariableSize;
 
 namespace ZstdSharp.Generator.CodeGenerator;
 
@@ -29,6 +30,7 @@ internal class ProjectBuilderConfig
     public bool ArrayCreateOptimization { get; }
     public bool UseDllExport { get; }
     public bool AvoidObjectInitializationInStatic { get; }
+    public IReadOnlyDictionary<string, IVariableSizeType> VariableSizeTypes { get; }
 
     public ProjectBuilderConfig(string namespaceName, string outputLocation,
         string unsafeOutputLocation, string sourceLocation,
@@ -43,7 +45,8 @@ internal class ProjectBuilderConfig
         bool arrayCreateOptimization = true,
         bool useDllExport = true,
         bool avoidObjectInitializationInStatic = true,
-        IReadOnlySet<string>? sourceExcludeNames = null)
+        IReadOnlySet<string>? sourceExcludeNames = null, 
+        IReadOnlyDictionary<string, IVariableSizeType>? variableSizeTypes = null)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -65,5 +68,6 @@ internal class ProjectBuilderConfig
         UseDllExport = useDllExport;
         AvoidObjectInitializationInStatic = avoidObjectInitializationInStatic;
         SourceExcludeNames = sourceExcludeNames ?? ImmutableHashSet<string>.Empty;
+        VariableSizeTypes = variableSizeTypes ?? ImmutableDictionary<string, IVariableSizeType>.Empty;
     }
 }

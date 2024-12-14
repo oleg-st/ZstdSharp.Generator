@@ -549,14 +549,22 @@ internal partial class CodeGenerator
 
     private ExpressionSyntax GetTypeSizeOf(Cursor cursor, Type type)
     {
-        return type.CanonicalType switch
+        switch (type.CanonicalType)
         {
-            ConstantArrayType constantArrayType => SyntaxFactory.BinaryExpression(SyntaxKind.MultiplyExpression,
-                GetTypeSizeOf(cursor, constantArrayType.ElementType),
-                SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression,
-                    SyntaxFactory.Literal((int) Math.Max(constantArrayType.Size, 1)))),
-            _ => SyntaxFactory.SizeOfExpression(GetRemappedCSharpType(cursor, type, out _))
-        };
+            case ConstantArrayType constantArrayType:
+                return SyntaxFactory.BinaryExpression(SyntaxKind.MultiplyExpression,
+                    GetTypeSizeOf(cursor, constantArrayType.ElementType),
+                    SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression,
+                        SyntaxFactory.Literal((int) Math.Max(constantArrayType.Size, 1))));
+            default:
+                var typeName = GetRemappedCSharpType(cursor, type, out _);
+                if (Config.VariableSizeTypes.TryGetValue(typeName.ToString(), out var variableSizeType))
+                {
+                    return variableSizeType.GetSizeOf(typeName);
+                }
+
+                return SyntaxFactory.SizeOfExpression(typeName);
+        }
     }
 
     private SyntaxNode? VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr unaryExprOrTypeTraitExpr)

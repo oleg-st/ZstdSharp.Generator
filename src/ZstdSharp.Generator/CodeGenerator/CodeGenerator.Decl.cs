@@ -641,6 +641,11 @@ internal partial class CodeGenerator
             {
                 case FieldDecl fieldDecl:
                 {
+                    if (!IsConstSize(fieldDecl) && !Config.VariableSizeTypes.ContainsKey(name))
+                    {
+                        Report(DiagnosticLevel.Warning, $"Unhandled variable field declaration {fieldDecl.Name} in struct {name}");
+                    }
+
                     if (fieldDecl.IsBitField)
                     {
                         Report(DiagnosticLevel.Info, $"Bit fields for structs is not supported {name}.{fieldDecl.Name}");
