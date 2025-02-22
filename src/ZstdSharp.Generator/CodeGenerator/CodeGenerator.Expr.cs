@@ -387,7 +387,7 @@ internal partial class CodeGenerator
             SyntaxFactory.CastExpression(type, SyntaxFactory.ParenthesizedExpression(expression));
 
         // unchecked
-        if (new[] {"nuint", "uint", "ushort", "byte"}.Contains(type.ToString()))
+        if (type.ToString() is "nuint" or "uint" or "ushort" or "byte")
         {
             var evalResult = expr.Handle.Evaluate;
             if (evalResult.Kind == CXEvalResultKind.CXEval_Int)
