@@ -62,6 +62,7 @@ public class Generator
             "compress/zstd_lazy.c",
             "compress/zstd_ldm.c",
             "compress/zstd_opt.c",
+            "compress/zstd_preSplit.c",
             // decompress
             "decompress/huf_decompress.c",
             "decompress/zstd_ddict.c",
@@ -81,6 +82,8 @@ public class Generator
             // export symbols
             "-DZSTD_DLL_EXPORT=1",
             "-fparse-all-comments",
+            // for assert(void *c)
+            "-Wno-int-conversion",
         };
 
         if (_withMultiThread)
@@ -125,6 +128,11 @@ public class Generator
             {"ptrdiff_t", "nint"},
             {"POOL_ctx_s", "void"},
             {"__m128i", "Vector128<sbyte>"},
+            // renamed in 1.5.7, rename back to keep backward compability
+            {"ZSTD_ParamSwitch_e", "ZSTD_paramSwitch_e"},
+            {"ZSTD_FrameType_e", "ZSTD_frameType_e" },
+            {"ZSTD_FrameHeader", "ZSTD_frameHeader" },
+            {"ZSTD_SequenceFormat_e", "ZSTD_sequenceFormat_e" },
         };
         var structToClasses = new HashSet<string>
         {
@@ -138,6 +146,7 @@ public class Generator
             "COVER_map_clear", "COVER_map_init", "COVER_prime4bytes", "COVER_map_hash", "COVER_map_index", "COVER_map_at", "COVER_map_remove", "COVER_map_destroy",
             "COVER_cmp", "COVER_cmp8", "COVER_strict_cmp", "COVER_strict_cmp8", "COVER_lower_bound", "COVER_groupBy", "COVER_group", "COVER_selectSegment", "COVER_checkParameters",
             "COVER_ctx_destroy", "COVER_ctx_init", "COVER_buildDictionary", "ZDICT_trainFromBuffer_cover", "COVER_tryParameters", "ZDICT_optimizeTrainFromBuffer_cover",
+            "stableSort",
             // ZDICT
             "g_selectivity_default", "ZDICT_clockSpan", "ZDICT_printHex", "ZDICT_getDictID", "ZDICT_getDictHeaderSize", "ZDICT_NbCommonBytes", "ZDICT_count", "ZDICT_initDictItem", "ZDICT_analyzePos", "isIncluded",
             "ZDICT_tryMerge", "ZDICT_removeDictItem", "ZDICT_insertDictItem", "ZDICT_dictSize", "ZDICT_trainBuffer_legacy", "ZDICT_fillNoise", "ZDICT_trainFromBuffer_unsafe_legacy", "ZDICT_trainFromBuffer_legacy",
@@ -269,7 +278,7 @@ public class Generator
         // inside of nested arrays, don't work in .NET Native
         var excludeFunctionPointers = new HashSet<string>
         {
-            "ZSTD_getAllMatchesFn", "ZSTD_blockCompressor",
+            "ZSTD_getAllMatchesFn", "ZSTD_BlockCompressor_f",
         };
 
         var variableSizeTypes = new Dictionary<string, IVariableSizeType>

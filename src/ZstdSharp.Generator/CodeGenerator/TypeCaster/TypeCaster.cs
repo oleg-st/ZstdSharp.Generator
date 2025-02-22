@@ -611,15 +611,17 @@ internal class TypeCaster
                     return MatchIntegers(li, ri, binaryOperator.LHS, binaryOperator.RHS, l, r);
                 }
 
-                // enum + integer (!int) -> integer, enum + int -> enum
-                if (l is EnumType && r is IntegerType && r.Name != "int")
+                // enum [+-] int -> pass
+                // enum [op] integer -> (integer)enum [op] integer
+                if (l is EnumType && r is IntegerType && !(r.Name == "int" && binaryOperator.Opcode is CXBinaryOperatorKind.CXBinaryOperator_Add or CXBinaryOperatorKind.CXBinaryOperator_Sub))
                 {
                     CastTo(binaryOperator.LHS, l, r, true);
                     return r.Inherit();
                 }
 
-                // integer (!int) + enum -> integer, enum + int -> enum
-                if (r.Name != "int" && r is EnumType)
+                // int [+-] enum -> pass
+                // // integer [op] enum -> (integer)enum [op] integer
+                if (!(l.Name == "int" && binaryOperator.Opcode is CXBinaryOperatorKind.CXBinaryOperator_Add or CXBinaryOperatorKind.CXBinaryOperator_Sub) && r is EnumType)
                 {
                     CastTo(binaryOperator.RHS, r, l, true);
                     return l.Inherit();

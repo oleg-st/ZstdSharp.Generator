@@ -582,6 +582,7 @@ internal class ProjectModifier
         // Skip inits
         ModifyMethod("ZSTD_buildSequencesStatistics", (_, method) => AddSkipInit(method, "stats"));
         ModifyMethod("ZSTD_errorFrameSizeInfo", (_, method) => AddSkipInit(method, "frameSizeInfo"));
+        ModifyMethod("ZSTD_get1BlockSummary", (_, method) => AddSkipInit(method, "bs"));
         // remove inlining
         ModifyMethod("ZSTD_encodeSequences_body",
             (_, method) => method
