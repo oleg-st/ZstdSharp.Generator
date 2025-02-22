@@ -23,6 +23,7 @@ internal partial class CodeGenerator
     private readonly TypeCaster.TypeCaster _typeCaster;
     private readonly CallReplacer _callReplacer;
     private readonly IReporter _reporter;
+    private readonly HashSet<CXSourceRange> _visitedComments = new();
 
     public CodeGenerator(ProjectBuilder projectBuilder)
     {
@@ -35,10 +36,13 @@ internal partial class CodeGenerator
         _typeCaster = new TypeCaster.TypeCaster(this, _callReplacer);
     }
 
-    private static string[] GetComments(Cursor cursor)
+    private string[] GetComments(Cursor cursor)
     {
         var comment = cursor.Handle.RawCommentText.CString;
-        return !string.IsNullOrEmpty(comment) ? comment.Split('\n') : Array.Empty<string>();
+        if (string.IsNullOrEmpty(comment) || !_visitedComments.Add(cursor.Handle.CommentRange))
+            return [];
+
+        return comment.Split('\n');
     }
 
     private T WithComments<T>(T node, Cursor cursor) where T : SyntaxNode
