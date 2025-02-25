@@ -18,6 +18,7 @@ internal class ProjectBuilderConfig
     public IReadOnlySet<string> ExcludedNames { get; }
     public IReadOnlySet<string> TraversalNames { get; }
     public IReadOnlySet<string> InlineMethods { get; }
+    public IReadOnlySet<string> JitInlineMethods { get; }
     public IReadOnlySet<string> ExcludeFunctionPointers { get; }
     public IReadOnlySet<string> SourceExcludeNames { get; }
 
@@ -46,7 +47,8 @@ internal class ProjectBuilderConfig
         bool useDllExport = true,
         bool avoidObjectInitializationInStatic = true,
         IReadOnlySet<string>? sourceExcludeNames = null, 
-        IReadOnlyDictionary<string, IVariableSizeType>? variableSizeTypes = null)
+        IReadOnlyDictionary<string, IVariableSizeType>? variableSizeTypes = null,
+        IReadOnlySet<string>? jitInlineMethods = null)
     {
         NamespaceName = namespaceName;
         OutputLocation = outputLocation;
@@ -69,5 +71,6 @@ internal class ProjectBuilderConfig
         AvoidObjectInitializationInStatic = avoidObjectInitializationInStatic;
         SourceExcludeNames = sourceExcludeNames ?? ImmutableHashSet<string>.Empty;
         VariableSizeTypes = variableSizeTypes ?? ImmutableDictionary<string, IVariableSizeType>.Empty;
+        JitInlineMethods = jitInlineMethods ?? ImmutableHashSet<string>.Empty;
     }
 }

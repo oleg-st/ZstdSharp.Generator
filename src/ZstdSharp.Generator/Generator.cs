@@ -286,12 +286,17 @@ public class Generator
             // sizeof(HUF_CTableHeader) == sizeof(nuint)
             {"HUF_CTableHeader", new OverrideSize(SyntaxFactory.IdentifierName("nuint"))},
         };
+        var jitInlineMethods = new HashSet<string>
+        {
+            "ZSTD_match4Found_cmov", "ZSTD_match4Found_branch",
+        };
 
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
             remappedNames: remappedNames,
             excludedNames: unnecessarySymbols, traversalNames: traversalNames, inlineMethods: inlineMethods,
             callReplacements: callReplacements, structToClasses: structToClasses, sourceExcludeNames: sourceExcludeNames,
-            excludeFunctionPointers: excludeFunctionPointers, variableSizeTypes: variableSizeTypes);
+            excludeFunctionPointers: excludeFunctionPointers, variableSizeTypes: variableSizeTypes,
+            jitInlineMethods: jitInlineMethods);
     }
 
     public async Task Generate()

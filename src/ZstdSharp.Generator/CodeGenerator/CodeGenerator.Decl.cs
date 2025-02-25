@@ -104,7 +104,7 @@ internal partial class CodeGenerator
         var isInlined = functionDecl.IsInlined || (
             functionDecl.HasAttrs &&
             functionDecl.Attrs.Any(x => x.Kind == CX_AttrKind.CX_AttrKind_AlwaysInline)
-        );
+        ) || Config.JitInlineMethods.Contains(name);
 
         var methodDeclaration = SyntaxFactory.MethodDeclaration(
                 returnCSharpType,
