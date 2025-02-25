@@ -567,15 +567,56 @@ internal partial class CodeGenerator
         }
     }
 
+    private ExpressionSyntax GetTypeAlignOf(Cursor cursor, Type type)
+    {
+        if (type is ElaboratedType elaboratedType)
+        {
+            return GetTypeAlignOf(cursor, elaboratedType.NamedType);
+        }
+
+        if (type is TypedefType typedefType)
+        {
+            return GetTypeAlignOf(cursor, typedefType.Decl.UnderlyingType);
+        }
+
+        if (type is ArrayType arrayType)
+        {
+            return GetTypeAlignOf(cursor, arrayType.ElementType);
+        }
+
+        if (type is RecordType recordType)
+        {
+            return recordType.Decl.Fields
+                       .Select(field => GetTypeAlignOf(cursor, field.Type))
+                       .DistinctBy(e => e.ToString())
+                       .Aggregate((ExpressionSyntax?) null,
+                           (accumulate, expression) => accumulate == null
+                               ? expression
+                               : SyntaxFactory.InvocationExpression(
+                                       SyntaxFactory.IdentifierName("Math.Max"))
+                                   .WithArgumentList(SyntaxFactory.ArgumentList(
+                                       SyntaxFactory.SeparatedList<ArgumentSyntax>(
+                                           new[]
+                                           {
+                                               SyntaxFactory.Argument(accumulate), SyntaxFactory.Argument(expression)
+                                           })))) ??
+                   SyntaxFactory.LiteralExpression(0);
+        }
+
+        return GetTypeSizeOf(cursor, type);
+    }
+
     private SyntaxNode? VisitUnaryExprOrTypeTraitExpr(UnaryExprOrTypeTraitExpr unaryExprOrTypeTraitExpr)
     {
         var argumentType = unaryExprOrTypeTraitExpr.TypeOfArgument;
 
         switch (unaryExprOrTypeTraitExpr.Kind)
         {
-            case CX_UnaryExprOrTypeTrait.CX_UETT_SizeOf:
             case CX_UnaryExprOrTypeTrait.CX_UETT_AlignOf:
             case CX_UnaryExprOrTypeTrait.CX_UETT_PreferredAlignOf:
+                return GetTypeAlignOf(unaryExprOrTypeTraitExpr, argumentType);
+
+            case CX_UnaryExprOrTypeTrait.CX_UETT_SizeOf:
                 return GetTypeSizeOf(unaryExprOrTypeTraitExpr, argumentType);
             default:
                 Report(DiagnosticLevel.Error, $"Unknown UnaryExprOrTypeTraitExpr kind {unaryExprOrTypeTraitExpr.Kind}");
