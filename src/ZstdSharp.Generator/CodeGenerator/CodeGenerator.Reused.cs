@@ -449,7 +449,7 @@ internal partial class CodeGenerator
         foreach (var decl in recordDecl.Decls)
         {
             if ((decl is FieldDecl fieldDecl && IsUnsafe(fieldDecl)) ||
-                (decl is RecordDecl {IsAnonymousStructOrUnion: true} nestedRecordDecl && IsUnsafe(nestedRecordDecl)))
+                (decl is RecordDecl {IsAnonymous: true} nestedRecordDecl && IsUnsafe(nestedRecordDecl)))
                 return true;
         }
 

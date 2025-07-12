@@ -659,10 +659,6 @@ internal partial class CodeGenerator
 
                     break;
                 }
-                case RecordDecl {IsAnonymousStructOrUnion: true}:
-                    //VisitAnonymousRecordDecl(recordDecl, nestedRecordDecl);
-                    Report(DiagnosticLevel.Error, $"IsAnonymousStructOrUnion for structs is not supported {name}");
-                    break;
             }
         }
 

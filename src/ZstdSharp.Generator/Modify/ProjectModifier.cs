@@ -532,7 +532,7 @@ internal class ProjectModifier
             builder.AddUsingDirective("System.Runtime.Intrinsics.Arm", "System.Runtime.Intrinsics.X86");
 
             return method.WithBody(ParseBody(
-                "#if NET5_0_OR_GREATER\r\n" +
+                "\r\n#if NET5_0_OR_GREATER\r\n" +
                 "            if (AdvSimd.IsSupported)\r\n" +
                 "            {\r\n" +
                 "                AdvSimd.Store((byte*) dst, AdvSimd.LoadVector128((byte*) src));\r\n" +
