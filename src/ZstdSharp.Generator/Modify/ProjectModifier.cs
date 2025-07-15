@@ -12,23 +12,14 @@ using ZstdSharp.Generator.CodeGenerator.Reporter;
 
 namespace ZstdSharp.Generator.Modify;
 
-internal class ProjectModifier
+internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter)
 {
-    private readonly ProjectBuilder _projectBuilder;
-    private readonly IReporter _reporter;
-
-    public ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter)
-    {
-        _projectBuilder = projectBuilder;
-        _reporter = reporter;
-    }
-
     private void ModifyMethod(string name,
         Func<FileBuilder, MethodDeclarationSyntax, MethodDeclarationSyntax?> modifier)
     {
-        if (!_projectBuilder.ModifyMethod(name, modifier))
+        if (!projectBuilder.ModifyMethod(name, modifier))
         {
-            _reporter.Report(DiagnosticLevel.Error, $"No method {name}");
+            reporter.Report(DiagnosticLevel.Error, $"No method {name}");
         }
     }
 
@@ -178,15 +169,14 @@ internal class ProjectModifier
                 var statements = ConvertSwitchToIfs(switchStatement);
                 if (statements == null)
                 {
-                    _reporter.Report(DiagnosticLevel.Error, "Failed to convert switch to ifs");
+                    reporter.Report(DiagnosticLevel.Error, "Failed to convert switch to ifs");
                     return method;
                 }
 
                 if (switchStatement.Parent is not BlockSyntax &&
                     !(statements.Count == 1 && statements.FirstOrDefault() is BlockSyntax))
                 {
-                    statements = new List<StatementSyntax>
-                        {SyntaxFactory.Block().WithStatements(SyntaxFactory.List(statements))};
+                    statements = [SyntaxFactory.Block().WithStatements(SyntaxFactory.List(statements))];
                 }
 
                 return method.ReplaceNode(switchStatement, statements);
@@ -196,40 +186,58 @@ internal class ProjectModifier
         return method;
     }
 
-    internal static MethodDeclarationSyntax AddSkipInit(MethodDeclarationSyntax method, string varName)
+    private class AddSkipInitRewriter : CSharpSyntaxRewriter
     {
-        foreach (var node in method.DescendantNodes())
-        {
-            if (node is LocalDeclarationStatementSyntax localDeclarationStatement)
-            {
-                foreach (var v in localDeclarationStatement.Declaration.Variables)
-                {
-                    if (v.Identifier.ToString() == varName && v.Initializer == null)
-                    {
-                        var callSkipInit = SyntaxFactory.ExpressionStatement(
-                            SyntaxFactory.InvocationExpression(
-                                    SyntaxFactory.IdentifierName("System.Runtime.CompilerServices.Unsafe.SkipInit"))
-                                .WithArgumentList(
-                                    SyntaxFactory.ArgumentList(
-                                        SyntaxFactory.SingletonSeparatedList(
-                                            SyntaxFactory.Argument(
-                                                    SyntaxFactory.IdentifierName(v.Identifier))
-                                                .WithRefOrOutKeyword(
-                                                    SyntaxFactory.Token(SyntaxKind.OutKeyword))))));
+        private HashSet<string>? _varNames;
 
-                        method = method.InsertNodesAfter(node, new[] { callSkipInit });
-                        break;
-                    }
+        public override SyntaxNode? VisitLocalDeclarationStatement(LocalDeclarationStatementSyntax node)
+        {
+            List<StatementSyntax>? additionalStatements = null;
+
+            foreach (var v in node.Declaration.Variables)
+            {
+                if (_varNames!.Remove(v.Identifier.ToString()) && v.Initializer == null)
+                {
+                    var callSkipInit = SyntaxFactory.ExpressionStatement(
+                        SyntaxFactory.InvocationExpression(
+                                SyntaxFactory.IdentifierName("System.Runtime.CompilerServices.Unsafe.SkipInit"))
+                            .WithArgumentList(
+                                SyntaxFactory.ArgumentList(
+                                    SyntaxFactory.SingletonSeparatedList(
+                                        SyntaxFactory.Argument(
+                                                SyntaxFactory.IdentifierName(v.Identifier))
+                                            .WithRefOrOutKeyword(
+                                                SyntaxFactory.Token(SyntaxKind.OutKeyword))))));
+
+                    additionalStatements ??= new List<StatementSyntax>();
+                    additionalStatements.Add(callSkipInit);
                 }
             }
+
+            if (additionalStatements != null)
+            {
+                return FoldBlockHelper.CombineStatements([node, ..additionalStatements]);
+            }
+
+            return base.VisitLocalDeclarationStatement(node);
         }
 
-        return method;
+        public MethodDeclarationSyntax Run(MethodDeclarationSyntax method, IEnumerable<string> varNames)
+        {
+            _varNames = [..varNames];
+            return (FoldBlockHelper.FoldBlocks(Visit(method)) as MethodDeclarationSyntax)!;
+        }
     }
+
+    internal static MethodDeclarationSyntax AddSkipInit(MethodDeclarationSyntax method, IEnumerable<string> varNames) 
+        => new AddSkipInitRewriter().Run(method, varNames);
+
+    internal static MethodDeclarationSyntax AddSkipInit(MethodDeclarationSyntax method, string varName)
+        => AddSkipInit(method, [varName]);
 
     private void GuardAsserts()
     {
-        foreach (var methodName in _projectBuilder.GetMethods())
+        foreach (var methodName in projectBuilder.GetMethods())
         {
             ModifyMethod(methodName, (builder, method) => new AssertsRewriter(builder).RewriteMethod(method));
         }
@@ -449,7 +457,7 @@ internal class ProjectModifier
         var clzBody = ParseBody("assert(val != 0);return (uint) BitOperations.LeadingZeroCount(val);");
         var highBitBody = ParseBody("assert(val != 0);return (uint) BitOperations.Log2(val);");
         // 1.5.2
-        if (_projectBuilder.HasMethod("ZSTD_countTrailingZeros"))
+        if (projectBuilder.HasMethod("ZSTD_countTrailingZeros"))
         {
             ModifyMethod("ZSTD_countTrailingZeros", (builder, method) =>
             {
@@ -597,7 +605,7 @@ internal class ProjectModifier
 
         ModifyVectorCode();
 
-        if (_projectBuilder.HasMethod("ZSTD_searchMax"))
+        if (projectBuilder.HasMethod("ZSTD_searchMax"))
         {
             // replace switches with ifs, remove unreachable branches
             ModifyMethod("ZSTD_searchMax",
@@ -793,14 +801,19 @@ internal class ProjectModifier
         // x = new T(); x.f = ...; -> x = new T { f = ... };
         ProcessStructInitialization();
 
-        // improve decompression
-        new ImproveDecompressSequences(_projectBuilder, _reporter).Run();
+        // improve compression/decompression
+        var refMethods = new RefMethods(projectBuilder, reporter);
+        refMethods.Run();
+        new ImproveDecompressSequences(projectBuilder, reporter, refMethods.Methods).Run();
+        new ImproveFseCompress(projectBuilder, refMethods.Methods).Run();
+        new ImproveHufCompress(projectBuilder, refMethods.Methods).Run();
+        new ImproveCompressSequences(projectBuilder, refMethods.Methods).Run();
     }
 
     private void ProcessStructInitialization()
     {
         var structInitialization = new StructInitialization();
-        foreach (var methodName in _projectBuilder.GetMethods())
+        foreach (var methodName in projectBuilder.GetMethods())
         {
             ModifyMethod(methodName, (_, method) => structInitialization.Process(method));
         }
@@ -816,6 +829,6 @@ internal class ProjectModifier
         };
 
         ModifyMethod(methodName,
-            (_, method) => new FastCLoopModifier(fastCLoopMethod, _reporter).RewriteMethod(method));
+            (_, method) => new FastCLoopModifier(fastCLoopMethod, reporter).RewriteMethod(method));
     }
 }

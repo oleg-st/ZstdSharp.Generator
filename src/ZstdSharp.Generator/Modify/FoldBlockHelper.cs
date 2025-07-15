@@ -51,7 +51,7 @@ internal static class FoldBlockHelper
                     {
                         var firstChild = node.ChildNodes().First();
                         var otherChildren = node.ChildNodes().Skip(1).ToList();
-                        if (otherChildren.Any())
+                        if (otherChildren.Count > 0)
                         {
                             sourceNode = sourceNode.InsertNodesAfter(node.Parent!, otherChildren);
                             node = sourceNode.GetAnnotatedNodes(ExpandBlockAnnotation)

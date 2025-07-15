@@ -24,13 +24,12 @@ internal class PointerToRefFixedBuffer: CSharpSyntaxRewriter
                 SyntaxFactory.IdentifierName("System.Runtime.CompilerServices.Unsafe.Add"),
                 SyntaxFactory.ArgumentList(
                     SyntaxFactory.SeparatedList(
-                        new List<ArgumentSyntax>
-                        {
+                        [
                             SyntaxFactory.Argument(memberAccess)
                                 .WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword)),
                             SyntaxFactory.Argument(SyntaxFactory.CastExpression(SyntaxFactory.ParseTypeName("int"),
                                 node.ArgumentList.Arguments[0].Expression))
-                        }
+                        ]
                     )
                 )
             );
@@ -39,7 +38,7 @@ internal class PointerToRefFixedBuffer: CSharpSyntaxRewriter
         return base.VisitElementAccessExpression(node);
     }
 
-    [return: NotNullIfNotNull("node")]
+    [return: NotNullIfNotNull(nameof(node))]
     public T? Run<T>(T? node) where T : SyntaxNode
     {
         return Visit(node) as T;

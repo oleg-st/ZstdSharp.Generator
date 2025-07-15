@@ -1,34 +1,29 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
-using System.IO;
-using System.Linq;
-using System.Threading.Tasks;
-using Microsoft.Build.Locator;
+﻿using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Simplification;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Linq;
+using System.Reflection.Emit;
+using System.Threading.Tasks;
 using ZstdSharp.Generator.CodeGenerator.Reporter;
 
 namespace ZstdSharp.Generator.CodeGenerator;
 
-internal class ProjectBuilder
+internal class ProjectBuilder(ProjectBuilderConfig config, IReporter reporter)
 {
-    public ProjectBuilderConfig Config { get; }
-    public IReporter Reporter { get; }
-    private readonly Dictionary<string, FileBuilder> _builders = new();
-    private readonly Dictionary<string, FileBuilder> _methodBuilders = new();
-    private readonly HashSet<string> _generatedTypes = new();
-    private readonly HashSet<string> _generatedInitConstructor = new();
-    private readonly HashSet<IReducer> _reducers = new ();
-
-    public ProjectBuilder(ProjectBuilderConfig config, IReporter reporter)
-    {
-        Config = config;
-        Reporter = reporter;
-    }
+    public ProjectBuilderConfig Config { get; } = config;
+    public IReporter Reporter { get; } = reporter;
+    private readonly Dictionary<string, FileBuilder> _builders = [];
+    private readonly Dictionary<string, FileBuilder> _methodBuilders = [];
+    private readonly HashSet<string> _generatedTypes = [];
+    private readonly HashSet<string> _generatedInitConstructor = [];
+    private readonly HashSet<IReducer> _reducers = [];
 
     internal bool AddGeneratedType(string name)
     {
@@ -125,7 +120,17 @@ internal class ProjectBuilder
 
     private async Task Simplify()
     {
-        MSBuildLocator.RegisterDefaults();
+        var preferred = MSBuildLocator.QueryVisualStudioInstances()
+            .FirstOrDefault(i => i.Version.Major == Environment.Version.Major);
+        if (preferred != null)
+        {
+            MSBuildLocator.RegisterInstance(preferred);
+        }
+        else
+        {
+            var instance = MSBuildLocator.RegisterDefaults();
+            Reporter.Report(DiagnosticLevel.Warning, $"Using MSBuild {instance.Version}");
+        }
 
         var workspace = MSBuildWorkspace.Create();
         workspace.WorkspaceFailed += (_, args) =>

@@ -1,5 +1,7 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Security.Cryptography.Pkcs;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -21,12 +23,18 @@ internal static class TreeHelper
         return expressionSyntax;
     }
 
-    public static T? GetValueOfType<T>(SyntaxNode node) where T : struct => 
-        GetValue(node, out var v) && v is T typeValue ? typeValue : null;
+    public static T? GetValueOfType<T>(SyntaxNode node, Dictionary<string, object?>? values = null) where T : struct => 
+        GetValue(node, out var v, values) && v is T typeValue ? typeValue : null;
 
-    public static bool GetValue(SyntaxNode node, out object? value)
+    public static bool GetValue(SyntaxNode node, out object? value, Dictionary<string, object?>? values = null)
     {
         value = default;
+
+        if (values != null && node is IdentifierNameSyntax identifierName && 
+            values.TryGetValue(identifierName.Identifier.ToString(), out value))
+        {
+            return true;
+        }
 
         if (node is LiteralExpressionSyntax literalExpression)
         {
@@ -52,12 +60,12 @@ internal static class TreeHelper
 
         if (node is ParenthesizedExpressionSyntax parenthesizedExpression)
         {
-            return GetValue(parenthesizedExpression.Expression, out value);
+            return GetValue(parenthesizedExpression.Expression, out value, values);
         }
 
         if (node is BinaryExpressionSyntax binaryExpression &&
-            GetValue(binaryExpression.Left, out var leftValue) &&
-            GetValue(binaryExpression.Right, out var rightValue))
+            GetValue(binaryExpression.Left, out var leftValue, values) &&
+            GetValue(binaryExpression.Right, out var rightValue, values))
         {
             if (leftValue is int leftIntValue && rightValue is int rightIntValue)
             {
@@ -118,7 +126,7 @@ internal static class TreeHelper
         }
 
         if (node is PrefixUnaryExpressionSyntax prefixUnaryExpression &&
-            GetValue(prefixUnaryExpression.Operand, out var opValue))
+            GetValue(prefixUnaryExpression.Operand, out var opValue, values))
         {
             if (opValue is bool opBoolValue)
             {
@@ -133,4 +141,35 @@ internal static class TreeHelper
         value = default;
         return false;
     }
+
+    public static IEnumerable<SyntaxNode> GetParents(SyntaxNode? node)
+    {
+        var parent = node?.Parent;
+        while (parent != null)
+        {
+            yield return parent;
+            parent = parent.Parent;
+        }
+    }
+
+    public static SeparatedSyntaxList<T> ReplaceItems<T>(Dictionary<T, List<T>> replacements, IEnumerable<T> items, Func<T, SyntaxNode> visit) where T : SyntaxNode
+    {
+        var newArgumentsList = new List<T>();
+        foreach (var arg in items)
+        {
+            if (replacements.TryGetValue(arg, out var list))
+            {
+                newArgumentsList.AddRange(list);
+            }
+            else
+            {
+                newArgumentsList.Add((T)visit(arg));
+            }
+        }
+
+        return SyntaxFactory.SeparatedList(newArgumentsList);
+    }
+
+    public static StatementSyntax? GetTopStatement(MethodDeclarationSyntax method, SyntaxNode node)
+        => GetParents(node).FirstOrDefault(n => n.Parent == method.Body) as StatementSyntax;
 }
