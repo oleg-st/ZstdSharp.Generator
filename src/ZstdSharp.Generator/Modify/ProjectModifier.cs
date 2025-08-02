@@ -806,6 +806,7 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
         refMethods.Run();
         new ImproveDecompressSequences(projectBuilder, reporter, refMethods.Methods).Run();
         new ImproveFseCompress(projectBuilder, refMethods.Methods).Run();
+        new ImproveFseDecompress(projectBuilder, refMethods.Methods).Run();
         new ImproveHufCompress(projectBuilder, refMethods.Methods).Run();
         new ImproveCompressSequences(projectBuilder, refMethods.Methods).Run();
     }

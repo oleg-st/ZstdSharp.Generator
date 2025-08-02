@@ -257,6 +257,29 @@ internal class RefMethods(ProjectBuilder projectBuilder, IReporter reporter)
         {
             {"bitC", RefMethodInfo.EmptyParameterInfo}
         }, true),
+        new(projectBuilder, "FSE_initDState", new ()
+        {
+            {"DStatePtr", RefMethodInfo.EmptyParameterInfo},
+            {"bitD", RefMethodInfo.EmptyParameterInfo}
+        }, true),
+        new(projectBuilder, "FSE_decodeSymbol", new ()
+        {
+            {"DStatePtr", RefMethodInfo.EmptyParameterInfo},
+            {"bitD", new(
+            [
+                new("bitContainer"),
+                new("bitsConsumed", true),
+            ])}
+        }, true),
+        new(projectBuilder, "FSE_decodeSymbolFast", new ()
+        {
+            {"DStatePtr", RefMethodInfo.EmptyParameterInfo},
+            {"bitD", new(
+            [
+                new("bitContainer"),
+                new("bitsConsumed", true),
+            ])}
+        }, true),
     ];
 
     public IReadOnlyList<RefMethodInfo> Methods => _methods;
