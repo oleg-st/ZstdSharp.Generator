@@ -39,11 +39,11 @@
     <PackageReference Include="Microsoft.CodeAnalysis" Version="4.14.0" />
 
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.14.0" />
-    <PackageReference Include="Microsoft.Build.Locator" Version="1.9.1" />
-    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.14.8" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.Build.Framework" Version="17.14.8" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.Build" Version="17.14.8" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.14.8" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.10.2" />
+    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.14.28" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.14.28" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build" Version="17.14.28" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.14.28" ExcludeAssets="runtime" />
 
   </ItemGroup>
 </Project>
