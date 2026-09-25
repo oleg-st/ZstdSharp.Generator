@@ -181,6 +181,16 @@ internal class StructInitialization
             }
         }
 
+        // value still reads the target (a field not set in the initializer, or the target itself):
+        // inside the initializer it would see the old value instead of the zeroed one -> stop
+        foreach (var valueNode in value.DescendantNodesAndSelf())
+        {
+            if (IsNodesSame(memberAccessExpression.Expression, valueNode))
+            {
+                return false;
+            }
+        }
+
         return true;
     }
 }
