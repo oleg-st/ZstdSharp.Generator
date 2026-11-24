@@ -95,7 +95,7 @@ public class Generator
 
         var reporter = new Reporter();
         _callsModifiers = new List<ICallsModifier>
-            {new DisplayCallsRemover(), new PrefetchCalls(), new AssertCalls(), new IsLittleEndianCalls()};
+            {new DisplayCallsRemover(), new PrefetchCalls(), new AssertCalls(), new IsLittleEndianCalls(), new Arm64Calls()};
         if (_withMultiThread)
         {
             _callsModifiers.Add(new SynchronizationCalls());
@@ -133,6 +133,8 @@ public class Generator
             {"ZSTD_FrameType_e", "ZSTD_frameType_e" },
             {"ZSTD_FrameHeader", "ZSTD_frameHeader" },
             {"ZSTD_SequenceFormat_e", "ZSTD_sequenceFormat_e" },
+            // Keep the existing managed name of the range used by the multithreaded compressor.
+            {"ZSTDMT_Range", "Range"},
         };
         var structToClasses = new HashSet<string>
         {

@@ -245,6 +245,51 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
 
     private void ModifyVectorCode()
     {
+        ModifyMethod("convertSequences_noRepcodes", (builder, method) =>
+        {
+            builder.AddUsingDirective("System.Runtime.Intrinsics", "System.Runtime.Intrinsics.Arm",
+                "System.Runtime.Intrinsics.X86");
+            var body = method.Body!;
+            var scalarLoop = body.Statements.OfType<ForStatementSyntax>().Single();
+            var vectorLoop = ParseBody("""
+                if (BitConverter.IsLittleEndian && (AdvSimd.Arm64.IsSupported || Ssse3.IsSupported))
+                {
+                    // A public sequence is four uints. Each packed sequence is one uint and two ushorts.
+                    Vector128<uint> adjustment = Vector128.Create(3U, 0U, unchecked(0U - 3U), 0U);
+                    Vector128<uint> lengthHighBits = Vector128.Create(0U, 0xffff0000U, 0xffff0000U, 0U);
+                    Vector128<byte> indices = Vector128.Create((byte)0, 1, 2, 3, 4, 5, 8, 9, 16, 17, 18, 19, 20, 21, 24, 25);
+                    while (nbSequences - n >= 2)
+                    {
+                        Vector128<uint> first = Vector128.Load(&inSeqs[n].offset) + adjustment;
+                        Vector128<uint> second = Vector128.Load(&inSeqs[n + 1].offset) + adjustment;
+                        // The scalar tail records the full position and kind of a long length.
+                        if (((first | second) & lengthHighBits) != Vector128<uint>.Zero)
+                            break;
+
+                        Vector128<byte> packed;
+                        if (AdvSimd.Arm64.IsSupported)
+                        {
+                            packed = AdvSimd.Arm64.VectorTableLookup((first.AsByte(), second.AsByte()), indices);
+                        }
+                        else
+                        {
+                            var firstPacked = Ssse3.Shuffle(first.AsByte(), indices);
+                            var secondPacked = Ssse3.Shuffle(second.AsByte(), indices);
+                            packed = Sse2.UnpackLow(firstPacked.AsUInt64(), secondPacked.AsUInt64()).AsByte();
+                        }
+                        packed.Store((byte*)(dstSeqs + n));
+                        n += 2;
+                    }
+                }
+                """);
+            return method.WithBody(body.WithStatements(body.Statements.ReplaceRange(scalarLoop,
+            [
+                SyntaxFactory.ExpressionStatement(scalarLoop.Initializers.Single()),
+                WrapWithIfDefined(vectorLoop.Statements.Single(), "NET8_0_OR_GREATER"),
+                scalarLoop.WithInitializers(default)
+            ])));
+        });
+
         /* SSE2 is available for .NET Core 3+, ARM for .NET 5/9+, software implementation otherwise */
         ModifyMethod("ZSTD_row_getMatchMask", (builder, method) =>
         {
@@ -809,6 +854,7 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
         new ImproveFseDecompress(projectBuilder, refMethods.Methods).Run();
         new ImproveHufCompress(projectBuilder, refMethods.Methods).Run();
         new ImproveCompressSequences(projectBuilder, refMethods.Methods).Run();
+        ImproveRowSearch.Run(projectBuilder);
     }
 
     private void ProcessStructInitialization()
