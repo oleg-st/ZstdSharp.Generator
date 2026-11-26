@@ -19,6 +19,29 @@ internal static class ImproveRowSearch
             throw new InvalidOperationException("Cannot find the row table updater.");
         project.ModifyMethod("ZSTD_RowFindBestMatch", (_, method) => ShortenScoringLocals(method));
         ImproveRowHash.Run(project);
+        project.ModifyMethod("ZSTD_RowFindBestMatch", UseFixedMatchBuffer);
+    }
+
+    private static MethodDeclarationSyntax UseFixedMatchBuffer(FileBuilder file, MethodDeclarationSyntax method)
+    {
+        var body = method.Body!;
+        var buffers = body.DescendantNodes().OfType<LocalDeclarationStatementSyntax>()
+            .Where(s => LocalName(s) == "matchBuffer").ToArray();
+        var expected = ParseStatement("uint* matchBuffer = stackalloc uint[64];");
+        if (buffers.Length != 2 || buffers.Any(s => !AreEquivalent(ParseStatement(s.NormalizeWhitespace().ToString()), expected)))
+            throw new InvalidOperationException("Expected 64-entry prefix and dictionary row match buffers.");
+
+        // Each scan visits at most one row. The dictionary scan starts after prefix scoring finishes.
+        // The fixed buffers keep a constant stack frame and each specialized search keeps only its row size.
+        var locals = new List<StatementSyntax>();
+        foreach (int size in new[] { 16, 32, 64 })
+        {
+            file.AddMethodsMember(ParseMemberDeclaration($"private struct RowMatchBuffer{size} {{ public fixed uint Indices[{size}]; }}")!);
+            locals.Add(ParseStatement($"RowMatchBuffer{size} buffer{size};"));
+        }
+        locals.Add(ParseStatement("uint* matchBuffer = rowLog == 4 ? buffer16.Indices : rowLog == 5 ? buffer32.Indices : buffer64.Indices;"));
+        body = body.RemoveNodes(buffers, SyntaxRemoveOptions.KeepNoTrivia)!;
+        return method.WithBody(body.WithStatements(body.Statements.InsertRange(0, locals)));
     }
 
     private static string? LocalName(StatementSyntax statement) =>

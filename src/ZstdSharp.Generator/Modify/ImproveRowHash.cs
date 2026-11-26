@@ -83,6 +83,34 @@ internal sealed class ImproveRowHash(string method, ExpressionSyntax initialShif
         return AreEquivalent(Shape(actual.NormalizeWhitespace().ToFullString()), Shape(expected));
     }
 
+    private BlockSyntax UpdateRowsBeforeSearch(BlockSyntax body)
+    {
+        var update = body.DescendantNodes().OfType<InvocationExpressionSyntax>().Single(call => Called(call) == Update);
+        if (update.Parent is not ExpressionStatementSyntax statement || statement.Parent is not BlockSyntax cached
+            || cached.Parent is not IfStatementSyntax branch || branch.Parent != body || branch.Statement != cached
+            || cached.Statements.First() != statement || !Matches(branch.Condition, "ms->lazySkipping == 0"))
+            throw new InvalidOperationException("Expected the row update at the start of the cached search.");
+
+        ExpressionSyntax InitialValue(string name) => body.Statements.OfType<LocalDeclarationStatementSyntax>()
+            .SelectMany(local => local.Declaration.Variables).Single(v => v.Identifier.ValueText == name).Initializer!.Value;
+        var mask = InitialValue("rowMask");
+        var entries = InitialValue("rowEntries");
+        if (!Matches(mask, "rowEntries - 1") || !Matches(entries, "1U << (int)rowLog"))
+            throw new InvalidOperationException("Expected a row mask derived from rowLog.");
+        var earlyMask = mask.ReplaceNode(mask.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Single(),
+            ParenthesizedExpression(entries));
+        var maskArgument = update.ArgumentList.Arguments.Single(arg => Matches(arg.Expression, "rowMask"));
+
+        // Update table entries before loading search bounds so fewer locals are live across the loop.
+        var useCache = IdentifierName("useCache");
+        var earlyUpdate = statement.ReplaceNode(maskArgument.Expression, earlyMask);
+        var remaining = branch.WithCondition(useCache).WithStatement(cached.WithStatements(cached.Statements.RemoveAt(0)));
+        return body.WithStatements(body.Statements.Replace(branch, remaining).InsertRange(0, [
+            ParseStatement($"int rowShift = {initialShift};"),
+            ParseStatement($"bool useCache = {branch.Condition.NormalizeWhitespace()};"),
+            IfStatement(useCache, earlyUpdate)]));
+    }
+
     private MethodDeclarationSyntax Rewrite(MethodDeclarationSyntax node)
     {
         var body = (BlockSyntax)Visit(node.Body!)!;
@@ -92,7 +120,7 @@ internal sealed class ImproveRowHash(string method, ExpressionSyntax initialShif
         if (method == Next)
             node = node.ReplaceNode(node.ParameterList.Parameters.Single(p => p.Identifier.ValueText == "hashLog"), shift);
         if (method == Match)
-            body = body.WithStatements(body.Statements.Insert(0, ParseStatement($"int rowShift = {initialShift};")));
+            body = UpdateRowsBeforeSearch(body);
         if (method == Range)
         {
             var loop = body.Statements.OfType<ForStatementSyntax>().Single();
@@ -107,6 +135,21 @@ internal sealed class ImproveRowHash(string method, ExpressionSyntax initialShif
                 throw new InvalidOperationException("Unexpected reserved-slot adjustment in ZSTD_row_nextIndex.");
             // A zero next index skips the reserved first slot. rowMask is at most 63.
             body = body.ReplaceNode(adjust, ParseExpression("next |= (uint)((int)(next - 1) >> 31) & rowMask").WithTriviaFrom(adjust));
+            if (body.Statements is not [LocalDeclarationStatementSyntax { Declaration.Variables: [{ Initializer.Value: var init }] },
+                _, ExpressionStatementSyntax { Expression: var store }, ReturnStatementSyntax { Expression: IdentifierNameSyntax { Identifier.ValueText: "next" } }]
+                || !Matches(init, "(uint)(*tagRow - 1) & rowMask") || !Matches(store, "*tagRow = (byte)next"))
+                throw new InvalidOperationException("Unexpected row head update in ZSTD_row_nextIndex.");
+
+            // Each nibble maps the current head to the preceding nonzero slot. Heads 0 and 1 wrap to slot 15.
+            var lookup = ParseStatement("""
+                if (Bmi2.X64.IsSupported && rowMask == 15)
+                {
+                    uint next4 = (uint)(0xEDCBA987654321FFUL >> (*tagRow << 2)) & 15;
+                    *tagRow = (byte)next4;
+                    return next4;
+                }
+                """);
+            body = body.WithStatements(body.Statements.Insert(0, ProjectModifier.WrapWithIfDefined(lookup, "NETCOREAPP3_0_OR_GREATER")));
         }
         return node.WithBody(body);
     }
