@@ -908,6 +908,21 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
         new ImproveHufCompress(projectBuilder, refMethods.Methods).Run();
         new ImproveCompressSequences(projectBuilder, refMethods.Methods).Run();
         ImproveRowSearch.Run(projectBuilder);
+
+        // Scalar shift counts wrap modulo the operand width, so width - h and -h select the same bits.
+        for (int n = 3; n <= 8; n++)
+        {
+            ModifyMethod($"ZSTD_hash{n}", (_, method) =>
+            {
+                var shift = method.DescendantNodes().OfType<BinaryExpressionSyntax>().Single(b => b.IsKind(SyntaxKind.RightShiftExpression));
+                if (TreeHelper.GetInnerExpression(shift.Right) is not CastExpressionSyntax cast || cast.Type.ToString() != "int"
+                    || TreeHelper.GetInnerExpression(cast.Expression) is not BinaryExpressionSyntax count || !count.IsKind(SyntaxKind.SubtractExpression)
+                    || TreeHelper.GetValueOfType<int>(count.Left) != (n <= 4 ? 32 : 64)
+                    || TreeHelper.GetInnerExpression(count.Right) is not IdentifierNameSyntax { Identifier.ValueText: "h" } bits)
+                    throw new InvalidOperationException($"Unexpected final shift in ZSTD_hash{n}.");
+                return method.ReplaceNode(shift.Right, SyntaxFactory.PrefixUnaryExpression(SyntaxKind.UnaryMinusExpression, cast.WithExpression(bits)));
+            });
+        }
     }
 
     private void ProcessStructInitialization()
