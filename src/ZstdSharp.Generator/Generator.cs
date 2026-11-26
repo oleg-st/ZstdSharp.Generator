@@ -247,7 +247,7 @@ public class Generator
             "ZSTD_RowFindBestMatch_generic", "ZSTD_RowFindBestMatch_selectMLS",
             // 1.5.1
             "HUF_getNbBits", "HUF_getNbBitsFast", "HUF_getValue", "HUF_getValueFast", "HUF_getIndex", "HUF_addBits", "HUF_zeroIndex1", "HUF_mergeIndex1", "HUF_flushBits",
-            "HUF_encodeSymbol", "HUF_buildDEltX2U32", "HUF_buildDEltX2U64",
+            "HUF_encodeSymbol", "HUF_compress1X_usingCTable_internal_body_loop", "HUF_buildDEltX2U32", "HUF_buildDEltX2U64",
             /*"ZSTD_copy16", */"HUF_buildDEltX2", "HUF_fillDTableX2ForWeight",
             "ZSTD_storeSeq", "ZSTD_compressBlock_fast_noDict_generic", "ZSTD_RowFindBestMatch", 
             // 1.5.2
