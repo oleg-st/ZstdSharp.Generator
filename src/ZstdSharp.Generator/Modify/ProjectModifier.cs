@@ -662,6 +662,45 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
             });
         }
 
+        // Start both child-node reads while matching the parent. Each ring slot has two links.
+        foreach (var name in new[] { "ZSTD_insertDUBT1", "ZSTD_DUBT_findBestMatch" })
+        {
+            ModifyMethod(name, (_, method) =>
+            {
+                LocalDeclarationStatementSyntax Local(string id) =>
+                    method.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().Single(statement =>
+                        statement.Declaration.Variables is [var variable] && variable.Identifier.ValueText == id);
+                static bool HasInitializer(LocalDeclarationStatementSyntax local, string expected)
+                {
+                    var init = local.Declaration.Variables.Single().Initializer?.Value;
+                    if (init == null) return false;
+                    // Compare expression trees independently of trivia and redundant parentheses from Clang.
+                    static ExpressionSyntax Shape(string text)
+                    {
+                        var node = SyntaxFactory.ParseExpression(text);
+                        return node.ReplaceNodes(node.DescendantNodesAndSelf().OfType<ParenthesizedExpressionSyntax>(),
+                            (_, rewritten) => rewritten.Expression);
+                    }
+                    return SyntaxFactory.AreEquivalent(Shape(init.NormalizeWhitespace().ToFullString()), Shape(expected));
+                }
+                var links = Local("nextPtr");
+                if (!HasInitializer(links, "bt + 2 * (matchIndex & btMask)")
+                    || !HasInitializer(Local("btMask"), "(uint)((1 << (int)btLog) - 1)")
+                    || !HasInitializer(Local("btLog"), "cParams->chainLog - 1")
+                    || !HasInitializer(Local("bt"), "ms->chainTable"))
+                    throw new InvalidOperationException($"Unexpected binary tree ring layout in {name}.");
+
+                var prefetch = SyntaxFactory.ParseStatement("""
+                    if (Sse.IsSupported)
+                    {
+                        Sse.Prefetch0((byte*)(bt + 2 * (nextPtr[0] & btMask)));
+                        Sse.Prefetch0((byte*)(bt + 2 * (nextPtr[1] & btMask)));
+                    }
+                    """);
+                return method.InsertNodesAfter(links, [WrapWithIfDefined(prefetch, "NETCOREAPP3_0_OR_GREATER")]);
+            });
+        }
+
         ModifyVectorCode();
 
         if (projectBuilder.HasMethod("ZSTD_searchMax"))
