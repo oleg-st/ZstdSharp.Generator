@@ -28,8 +28,7 @@ internal sealed class ImproveRowHash(string method, ExpressionSyntax initialShif
             throw new InvalidOperationException("Expected row hash width plus tag bits.");
         var initial = ParseExpression($"{64 - Convert.ToInt32(tagBits)} - (int)ms->rowHashLog");
 
-        // Derive the load width, multiplier and byte alignment from the existing upstream hash functions.
-        // Moving the left shift onto the constant is valid for multiplication modulo 2^64.
+        // Reuse the load and multiplier from the common hash functions.
         string HashCase(int n)
         {
             var returned = TreeHelper.GetInnerExpression(Source($"ZSTD_hash{n}").DescendantNodes()
@@ -45,10 +44,7 @@ internal sealed class ImproveRowHash(string method, ExpressionSyntax initialShif
             string prime = product.Right.ToString(), load = $"{read.Expression}(src)";
             if (n == 4)
                 return $"if (mls == 4) return ({load} * {prime} ^ (uint)salt) >> rowShift;";
-            if (TreeHelper.GetInnerExpression(product.Left) is not BinaryExpressionSyntax alignment ||
-                !alignment.IsKind(SyntaxKind.LeftShiftExpression))
-                throw new InvalidOperationException($"Unexpected input alignment in ZSTD_hash{n}.");
-            return $"if (mls == {n}) return (uint)(({load} * ({prime} << ({alignment.Right})) ^ salt) >> rowShift);";
+            return $"if (mls == {n}) return (uint)(({load} * {prime} ^ salt) >> rowShift);";
         }
 
         var helper = (MethodDeclarationSyntax)ParseMemberDeclaration($$"""

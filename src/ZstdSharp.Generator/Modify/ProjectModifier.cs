@@ -648,6 +648,20 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
         // switch to ifs
         ModifyMethod("ZSTD_hashPtrSalted", (_, method) => ConvertMethodSwitchToIfs(method));
 
+        // Fold a constant byte-alignment shift into the multiplier, preserving uint/ulong arithmetic.
+        foreach (int n in new[] { 3, 5, 6, 7 })
+        {
+            ModifyMethod($"ZSTD_hash{n}", (_, method) =>
+            {
+                var product = method.DescendantNodes().OfType<BinaryExpressionSyntax>().Single(b => b.IsKind(SyntaxKind.MultiplyExpression));
+                if (TreeHelper.GetInnerExpression(product.Left) is not BinaryExpressionSyntax shift || !shift.IsKind(SyntaxKind.LeftShiftExpression)
+                    || shift.Left is not IdentifierNameSyntax { Identifier.ValueText: "u" } || product.Right.ToString() != $"prime{n}bytes")
+                    throw new InvalidOperationException($"Unexpected aligned product in ZSTD_hash{n}.");
+                var folded = product.WithLeft(shift.Left).WithRight(SyntaxFactory.ParenthesizedExpression(shift.WithLeft(product.Right)));
+                return method.ReplaceNode(product, folded);
+            });
+        }
+
         ModifyVectorCode();
 
         if (projectBuilder.HasMethod("ZSTD_searchMax"))
