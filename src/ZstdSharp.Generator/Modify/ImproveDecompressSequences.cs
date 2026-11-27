@@ -554,10 +554,10 @@ internal class ImproveDecompressSequences(
         projectBuilder.ModifyMethod(ZstdDecompressSequencesBody, (_, method) =>
         {
             method = ProjectModifier.AddSkipInit(method, "seqState");
-            return new PointerToRefFixedBuffer().Run(
+            return ImproveFseState.CacheEntryPointers(new PointerToRefFixedBuffer().Run(
                 new DecompressSequencesModifier(projectBuilder, reporter,
                         refMethods)
-                    .Run(method));
+                    .Run(method)));
         });
 
         // use ref methods in ZSTD_execSequence

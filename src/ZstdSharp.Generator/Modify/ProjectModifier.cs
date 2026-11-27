@@ -911,6 +911,7 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
             return method.ReplaceNode(count, SyntaxFactory.ParseExpression("unchecked(0U - nbBits)"));
         });
 
+        ImproveFseState.KeepStateIndex(projectBuilder);
         var refMethods = new RefMethods(projectBuilder, reporter);
         refMethods.Run();
 

@@ -290,7 +290,7 @@ public class Generator
         };
         var jitInlineMethods = new HashSet<string>
         {
-            "ZSTD_match4Found_cmov", "ZSTD_match4Found_branch",
+            "ZSTD_match4Found_cmov", "ZSTD_match4Found_branch", "ZSTD_initFseState",
         };
 
         return new ProjectBuilderConfig(namespaceName, _outputLocation, _unsafeOutputLocation, _sourceLocation,
