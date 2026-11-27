@@ -900,8 +900,26 @@ internal class ProjectModifier(ProjectBuilder projectBuilder, IReporter reporter
         ProcessStructInitialization();
 
         // improve compression/decompression
+        ModifyMethod("BIT_lookBitsFast", (_, method) =>
+        {
+            var count = method.DescendantNodes().OfType<BinaryExpressionSyntax>().Single(expr =>
+                expr.IsKind(SyntaxKind.SubtractExpression) && expr.Right.ToString() == "nbBits");
+            if (TreeHelper.GetInnerExpression(count.Left) is not BinaryExpressionSyntax width ||
+                !width.IsKind(SyntaxKind.AddExpression) || TreeHelper.GetInnerExpression(width.Left).ToString() != "regMask" ||
+                TreeHelper.GetValueOfType<int>(TreeHelper.GetInnerExpression(width.Right)) != 1)
+                throw new InvalidOperationException($"Unexpected bit-container width in BIT_lookBitsFast: {count.Left}");
+            return method.ReplaceNode(count, SyntaxFactory.ParseExpression("unchecked(0U - nbBits)"));
+        });
+
         var refMethods = new RefMethods(projectBuilder, reporter);
         refMethods.Run();
+
+        // A C# shift masks its count, so -bitsConsumed selects the start of the bits just consumed.
+        ModifyMethod("BIT_readBits_ref", (_, method) => method.WithBody(ParseBody("""
+            bitD_bitsConsumed += nbBits;
+            return BIT_getMiddleBits(bitD_bitContainer, unchecked(0U - bitD_bitsConsumed), nbBits);
+            """)));
+
         new ImproveDecompressSequences(projectBuilder, reporter, refMethods.Methods).Run();
         new ImproveFseCompress(projectBuilder, refMethods.Methods).Run();
         new ImproveFseDecompress(projectBuilder, refMethods.Methods).Run();
